@@ -1,0 +1,86 @@
+# Lima VM: linux
+# Ubuntu 24.04 ARM64 with audio passthrough
+#
+# Tested on: macOS + Apple Silicon (M4)
+# Lima 2.0.3, vmType: vz, audio.device: vz
+
+# VZ: native Apple Virtualization.framework — faster than QEMU on Apple Silicon
+vmType: vz
+
+images:
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+
+user:
+  name: claude
+  uid: 1000
+  home: "/home/claude"
+  shell: "/bin/bash"
+
+cpus: 4
+memory: 4096MiB
+disk: 40GiB
+
+mounts:
+  - location: "~/claude-workspace"
+    mountPoint: "/claude-workspace"
+    writable: true
+
+# Audio: VZ virtio sound device → macOS host speakers
+audio:
+  device: vz
+
+# Provision the guest with audio drivers and essential packages
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Set hostname (Lima defaults to lima-<instance>, override to just "linux")
+      hostnamectl set-hostname linux
+      sed -i 's/lima-linux/linux/g' /etc/hosts
+
+      # Cloud images lack linux-modules-extra — needed for virtio_snd driver
+      apt-get update -qq
+      apt-get install -y -qq linux-modules-extra-$(uname -r)
+
+      # Load the virtio sound module and persist across reboots
+      modprobe virtio_snd
+      echo "virtio_snd" >> /etc/modules
+
+      # Install ALSA and PulseAudio for audio playback
+      apt-get install -y -qq alsa-utils pulseaudio pulseaudio-utils
+
+      # Enable PulseAudio system-wide service (headless VM, no user session)
+      mkdir -p /etc/pulse/system.pa.d
+      cat > /etc/pulse/system.pa.d/90-vm-audio.pa <<'PULSE'
+      load-module module-udev-detect
+      load-module module-native-protocol-unix auth-anonymous=1
+      load-module module-always-sink
+      PULSE
+
+      # Create systemd service for PulseAudio in system mode
+      cat > /etc/systemd/system/pulseaudio.service <<'UNIT'
+      [Unit]
+      Description=PulseAudio System-Wide Server
+      After=sound.target
+
+      [Service]
+      Type=notify
+      ExecStart=/usr/bin/pulseaudio --system --disallow-exit --disallow-module-loading=0
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+      UNIT
+
+      # Add default user to audio and pulse groups
+      usermod -aG audio,pulse,pulse-access claude
+
+      # Enable and start PulseAudio
+      systemctl daemon-reload
+      systemctl enable pulseaudio.service
+
+      # Install optional but recommended CLI tools
+      apt-get install -y -qq jq tree tmux wget whois dnsutils imagemagick ffmpeg python3-venv
