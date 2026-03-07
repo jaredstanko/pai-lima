@@ -8,7 +8,7 @@ PAI + PAI Companion running on a Lima VM (Ubuntu 24.04 ARM64) with audio passthr
 - **Audio** — VirtIO sound device passed through to macOS speakers
 - **PAI v4.0** — [Personal AI Infrastructure](https://github.com/danielmiessler/Personal_AI_Infrastructure)
 - **PAI Companion** — [Web portal, file exchange, context enhancements](https://github.com/chriscantey/pai-companion) (portal served via Bun, not Docker)
-- **Shared folder** — `~/claude-workspace` on Mac ↔ `/claude-workspace` in VM
+- **Shared folder** — `/home/claude` in VM shared with Mac as `~/claude-workspace`
 
 ## Prerequisites
 
@@ -27,19 +27,14 @@ cd pai-lima
 # 2. Install Lima
 brew install lima
 
-# 3. Create the shared workspace
-mkdir -p ~/claude-workspace
-
-# 4. Copy the install script to the workspace
-cp install.sh ~/claude-workspace/
-
-# 5. Create and start the VM
+# 3. Create and start the VM
 limactl create --name=linux linux.yaml
 limactl start linux
 
-# 6. Shell into the VM and run the install script
+# 4. Copy the install script into the VM and run it
+limactl cp install.sh linux:~/install.sh
 limactl shell linux
-bash /claude-workspace/install.sh
+bash ~/install.sh
 ```
 
 ## Installing Lima
@@ -78,15 +73,7 @@ limactl --version
 
 ## Creating the VM
 
-### 1. Prepare the shared folder
-
-```bash
-mkdir -p ~/claude-workspace
-```
-
-This directory is shared between your Mac and the VM. The install script and any files you place here will be accessible inside the VM at `/claude-workspace`.
-
-### 2. Create the VM
+### 1. Create the VM
 
 ```bash
 limactl create --name=linux linux.yaml
@@ -104,9 +91,9 @@ This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first do
 | Memory | 4 GiB |
 | Disk | 40 GiB |
 | Audio | VirtIO sound (VZ) → macOS speakers |
-| Shared folder | `~/claude-workspace` → `/claude-workspace` |
+| Shared folder | `/home/claude` → `~/claude-workspace` (reverse mount) |
 
-### 3. Start the VM
+### 2. Start the VM
 
 ```bash
 limactl start linux
@@ -114,7 +101,7 @@ limactl start linux
 
 First boot runs provisioning (installs audio drivers, ALSA, PulseAudio, CLI tools). Takes 2-3 minutes.
 
-### 4. Shell in
+### 3. Shell in
 
 ```bash
 limactl shell linux
@@ -131,7 +118,7 @@ claude@linux:~$
 From inside the VM:
 
 ```bash
-bash /claude-workspace/install.sh
+bash ~/install.sh
 ```
 
 The script installs (in order):
@@ -209,7 +196,7 @@ limactl list
 ## Directory Layout (inside VM)
 
 ```
-/claude-workspace/   Shared with macOS ~/claude-workspace
+~/                   Home directory (/home/claude), shared with macOS as ~/claude-workspace
 ~/portal/            Companion web portal (served on :8080)
 ~/exchange/          File exchange directory
 ~/work/              Project workspace (git tracked)
@@ -228,7 +215,7 @@ limactl list
 
 **Portal not accessible:** Check the service is running: `systemctl --user status pai-portal`. Get the VM IP: `hostname -I`.
 
-**Shared folder not visible:** Ensure `~/claude-workspace` exists on your Mac before starting the VM.
+**Shared folder not visible:** The VM's `/home/claude` is reverse-mounted to `~/claude-workspace` on macOS. Ensure the VM is running (`limactl list`) and check that the mount is active.
 
 ## Credits
 
