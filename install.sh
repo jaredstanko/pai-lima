@@ -3,7 +3,7 @@
 # Run this INSIDE the Lima VM as the 'claude' user.
 #
 # Usage:
-#   bash /claude-workspace/install.sh
+#   bash ~/install.sh
 #
 # This script installs:
 #   1. Bun (JavaScript runtime)

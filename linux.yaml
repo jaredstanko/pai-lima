@@ -23,7 +23,8 @@ disk: 40GiB
 
 mounts:
   - location: "~/claude-workspace"
-    mountPoint: "/claude-workspace"
+    mountPoint: "/home/claude"
+    reverse: true
     writable: true
 
 # Audio: VZ virtio sound device → macOS host speakers
