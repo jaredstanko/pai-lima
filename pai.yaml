@@ -1,4 +1,4 @@
-# Lima VM: linux
+# Lima VM: pai
 # Ubuntu 24.04 ARM64 with audio passthrough
 #
 # Tested on: macOS + Apple Silicon (M4)
@@ -38,9 +38,9 @@ provision:
       #!/bin/bash
       set -eux -o pipefail
 
-      # Set hostname (Lima defaults to lima-<instance>, override to just "linux")
-      hostnamectl set-hostname linux
-      sed -i 's/lima-linux/linux/g' /etc/hosts
+      # Set hostname (Lima defaults to lima-<instance>, override to just "pai")
+      hostnamectl set-hostname pai
+      sed -i 's/lima-pai/pai/g' /etc/hosts
 
       # Cloud images lack linux-modules-extra — needed for virtio_snd driver
       apt-get update -qq
