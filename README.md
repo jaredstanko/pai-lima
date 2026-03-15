@@ -28,12 +28,12 @@ cd pai-lima
 brew install lima
 
 # 3. Create and start the VM
-limactl create --name=linux linux.yaml
-limactl start linux
+limactl create --name=pai pai.yaml
+limactl start pai
 
 # 4. Copy the install script into the VM and run it
-limactl cp install.sh linux:~/install.sh
-limactl shell linux
+limactl cp install.sh pai:~/install.sh
+limactl shell pai
 bash ~/install.sh
 ```
 
@@ -76,7 +76,7 @@ limactl --version
 ### 1. Create the VM
 
 ```bash
-limactl create --name=linux linux.yaml
+limactl create --name=pai pai.yaml
 ```
 
 This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first download) and configures the VM with:
@@ -86,7 +86,7 @@ This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first do
 | VM engine | VZ (Apple Virtualization.framework) |
 | Image | Ubuntu 24.04 ARM64 cloud image |
 | User | `claude` (uid 1000) |
-| Hostname | `linux` |
+| Hostname | `pai` |
 | CPUs | 4 |
 | Memory | 4 GiB |
 | Disk | 40 GiB |
@@ -96,7 +96,7 @@ This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first do
 ### 2. Start the VM
 
 ```bash
-limactl start linux
+limactl start pai
 ```
 
 First boot runs provisioning (installs audio drivers, ALSA, PulseAudio, CLI tools). Takes 2-3 minutes.
@@ -104,13 +104,13 @@ First boot runs provisioning (installs audio drivers, ALSA, PulseAudio, CLI tool
 ### 3. Shell in
 
 ```bash
-limactl shell linux
+limactl shell pai
 ```
 
 You should see:
 
 ```
-claude@linux:~$
+claude@pai:~$
 ```
 
 ## Installing PAI + PAI Companion
@@ -152,13 +152,13 @@ http://<vm-ip>:8080
 Find the VM's IP with:
 
 ```bash
-limactl shell linux -- hostname -I
+limactl shell pai -- hostname -I
 ```
 
 ## Verifying Audio
 
 ```bash
-limactl shell linux
+limactl shell pai
 
 # Check sound card
 sudo aplay -l
@@ -179,15 +179,15 @@ sudo speaker-test -D plughw:1,0 -t sine -f 440 -l 1 -p 2
 
 ```bash
 # Stop the VM
-limactl stop linux
+limactl stop pai
 
 # Start it again
-limactl start linux
+limactl start pai
 
 # Delete and recreate
-limactl delete linux --force
-limactl create --name=linux linux.yaml
-limactl start linux
+limactl delete pai --force
+limactl create --name=pai pai.yaml
+limactl start pai
 
 # List VMs
 limactl list
@@ -207,11 +207,11 @@ limactl list
 
 ## Troubleshooting
 
-**VM won't start:** Make sure no other Lima instance named `linux` exists. Run `limactl delete linux --force` first.
+**VM won't start:** Make sure no other Lima instance named `pai` exists. Run `limactl delete pai --force` first.
 
 **No audio:** The Ubuntu cloud image doesn't ship `linux-modules-extra`. The provisioning script installs it, but if it fails, run manually: `sudo apt-get install -y linux-modules-extra-$(uname -r) && sudo modprobe virtio_snd`
 
-**aplay works with sudo but not as claude:** Log out and back in (`exit` then `limactl shell linux`) to refresh group membership after provisioning.
+**aplay works with sudo but not as claude:** Log out and back in (`exit` then `limactl shell pai`) to refresh group membership after provisioning.
 
 **Portal not accessible:** Check the service is running: `systemctl --user status pai-portal`. Get the VM IP: `hostname -I`.
 
