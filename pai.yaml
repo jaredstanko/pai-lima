@@ -23,7 +23,7 @@ disk: 40GiB
 
 mounts:
   - location: "~/claude-workspace"
-    mountPoint: "/home/claude"
+    mountPoint: "/home/claude/workspace"
     reverse: true
     writable: true
 
