@@ -8,7 +8,7 @@ PAI + PAI Companion running on a Lima VM (Ubuntu 24.04 ARM64) with audio passthr
 - **Audio** — VirtIO sound device passed through to macOS speakers
 - **PAI v4.0** — [Personal AI Infrastructure](https://github.com/danielmiessler/Personal_AI_Infrastructure)
 - **PAI Companion** — [Web portal, file exchange, context enhancements](https://github.com/chriscantey/pai-companion) (portal served via Bun, not Docker)
-- **Shared folder** — `/home/claude/workspace` in VM shared with Mac as `~/claude-workspace`
+- **Shared folders** — Key VM directories mounted from `~/pai-workspace/` on Mac
 
 ## Prerequisites
 
@@ -91,7 +91,7 @@ This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first do
 | Memory | 4 GiB |
 | Disk | 40 GiB |
 | Audio | VirtIO sound (VZ) → macOS speakers |
-| Shared folder | `/home/claude/workspace` → `~/claude-workspace` (reverse mount) |
+| Shared folders | `~/pai-workspace/*` → VM dirs (see below) |
 
 ### 2. Start the VM
 
@@ -196,14 +196,14 @@ limactl list
 ## Directory Layout (inside VM)
 
 ```
-~/                          Home directory (/home/claude)
-~/workspace/                Shared with macOS as ~/claude-workspace
-~/workspace/portal/         Companion web portal (served on :8080)
-~/workspace/exchange/       File exchange directory
-~/workspace/work/           Project workspace (git tracked)
-~/workspace/data/           Data storage
-~/workspace/upstream/       Reference repos (PAI, TheAlgorithm)
-~/.claude/                  PAI configuration and skills
+Guest (VM)                  Host (Mac)
+─────────────────────────── ──────────────────────────
+~/.claude/                  ~/pai-workspace/claude-home/
+~/portal/                   ~/pai-workspace/portal/
+~/exchange/                 ~/pai-workspace/exchange/
+~/work/                     ~/pai-workspace/work/
+~/data/                     ~/pai-workspace/data/
+~/upstream/                 ~/pai-workspace/upstream/
 ```
 
 ## Troubleshooting
@@ -216,7 +216,7 @@ limactl list
 
 **Portal not accessible:** Check the service is running: `systemctl --user status pai-portal`. Get the VM IP: `hostname -I`.
 
-**Shared folder not visible:** The VM's `/home/claude/workspace` is reverse-mounted to `~/claude-workspace` on macOS. Ensure the VM is running (`limactl list`) and check that the mount is active.
+**Shared folders not visible:** Host directories under `~/pai-workspace/` are mounted into the VM. Ensure the directories exist on your Mac before starting the VM: `mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}`
 
 ## Credits
 

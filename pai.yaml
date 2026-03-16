@@ -22,9 +22,23 @@ memory: 4096MiB
 disk: 40GiB
 
 mounts:
-  - location: "~/claude-workspace"
-    mountPoint: "/home/claude/workspace"
-    reverse: true
+  - location: "~/pai-workspace/claude-home"
+    mountPoint: "/home/claude/.claude"
+    writable: true
+  - location: "~/pai-workspace/data"
+    mountPoint: "/home/claude/data"
+    writable: true
+  - location: "~/pai-workspace/exchange"
+    mountPoint: "/home/claude/exchange"
+    writable: true
+  - location: "~/pai-workspace/portal"
+    mountPoint: "/home/claude/portal"
+    writable: true
+  - location: "~/pai-workspace/work"
+    mountPoint: "/home/claude/work"
+    writable: true
+  - location: "~/pai-workspace/upstream"
+    mountPoint: "/home/claude/upstream"
     writable: true
 
 # Audio: VZ virtio sound device → macOS host speakers
