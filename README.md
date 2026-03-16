@@ -27,11 +27,14 @@ cd pai-lima
 # 2. Install Lima
 brew install lima
 
-# 3. Create and start the VM
+# 3. Create host directories for shared mounts
+mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}
+
+# 4. Create and start the VM
 limactl create --name=pai pai.yaml
 limactl start pai
 
-# 4. Copy the install script into the VM and run it
+# 5. Copy the install script into the VM and run it
 limactl cp install.sh pai:~/install.sh
 limactl shell pai
 bash ~/install.sh
@@ -73,7 +76,15 @@ limactl --version
 
 ## Creating the VM
 
-### 1. Create the VM
+### 1. Create host directories
+
+```bash
+mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}
+```
+
+These directories are shared with the VM via writable mounts. They must exist before creating the VM.
+
+### 2. Create the VM
 
 ```bash
 limactl create --name=pai pai.yaml
@@ -93,7 +104,7 @@ This downloads the Ubuntu 24.04 ARM64 cloud image (~700MB, cached after first do
 | Audio | VirtIO sound (VZ) → macOS speakers |
 | Shared folders | `~/pai-workspace/*` → VM dirs (see below) |
 
-### 2. Start the VM
+### 3. Start the VM
 
 ```bash
 limactl start pai
@@ -101,7 +112,7 @@ limactl start pai
 
 First boot runs provisioning (installs audio drivers, ALSA, PulseAudio, CLI tools). Takes 2-3 minutes.
 
-### 3. Shell in
+### 4. Shell in
 
 ```bash
 limactl shell pai
