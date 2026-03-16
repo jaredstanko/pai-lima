@@ -114,15 +114,15 @@ rm -rf pai-companion
 git clone https://github.com/chriscantey/pai-companion.git
 cd pai-companion
 
-# Create companion directory structure under ~/workspace (shared with macOS host)
-mkdir -p ~/workspace/portal ~/workspace/exchange ~/workspace/work ~/workspace/data ~/workspace/upstream
+# Create companion directory structure (mounted from macOS host)
+mkdir -p ~/portal ~/exchange ~/work ~/data ~/upstream
 
 # Copy companion files
 if [ -d companion/portal ]; then
-  cp -r companion/portal/* ~/workspace/portal/ 2>/dev/null || true
+  cp -r companion/portal/* ~/portal/ 2>/dev/null || true
 fi
 if [ -d companion/welcome ]; then
-  cp -r companion/welcome/* ~/workspace/portal/ 2>/dev/null || true
+  cp -r companion/welcome/* ~/portal/ 2>/dev/null || true
 fi
 if [ -d companion/context ]; then
   cp -r companion/context/* ~/.claude/ 2>/dev/null || true
@@ -132,14 +132,14 @@ if [ -d companion/scripts ]; then
 fi
 
 # Clone upstream repos for reference
-cd ~/workspace/upstream
+cd ~/upstream
 [ -d PAI ] || git clone https://github.com/danielmiessler/PAI.git 2>/dev/null || true
 [ -d TheAlgorithm ] || git clone https://github.com/danielmiessler/TheAlgorithm.git 2>/dev/null || true
 
 # --- Portal server WITHOUT Docker ---
 # Create a simple Bun-based static file server
-mkdir -p ~/workspace/portal
-cat > ~/workspace/portal/serve.ts <<'SERVE'
+mkdir -p ~/portal
+cat > ~/portal/serve.ts <<'SERVE'
 const server = Bun.serve({
   port: 8080,
   hostname: "0.0.0.0",
@@ -157,8 +157,8 @@ console.log(`Portal server running on http://0.0.0.0:${server.port}`);
 SERVE
 
 # Create a placeholder index.html if none exists
-if [ ! -f ~/workspace/portal/index.html ]; then
-  cat > ~/workspace/portal/index.html <<'HTML'
+if [ ! -f ~/portal/index.html ]; then
+  cat > ~/portal/index.html <<'HTML'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -193,7 +193,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/workspace/portal
+WorkingDirectory=%h/portal
 ExecStart=%h/.bun/bin/bun run serve.ts
 Restart=on-failure
 Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
@@ -211,7 +211,7 @@ systemctl --user start pai-portal.service
 log "Portal server started on port 8080 (Bun, no Docker)."
 
 # Initialize git tracking for work and .claude directories
-cd ~/workspace/work && git init -q && git add -A && git commit -q -m "Initial work directory" 2>/dev/null || true
+cd ~/work && git init -q && git add -A && git commit -q -m "Initial work directory" 2>/dev/null || true
 cd ~/.claude && git init -q && git add -A && git commit -q -m "Initial PAI config" 2>/dev/null || true
 
 rm -rf /tmp/pai-companion
@@ -241,9 +241,9 @@ echo -e "${BOLD}${GREEN}============================================${NC}"
 echo ""
 log "PAI:        ~/.claude/"
 log "Portal:     http://$(hostname -I | awk '{print $1}'):8080"
-log "Exchange:   ~/workspace/exchange/"
-log "Work:       ~/workspace/work/"
-log "Upstream:   ~/workspace/upstream/"
+log "Exchange:   ~/exchange/"
+log "Work:       ~/work/"
+log "Upstream:   ~/upstream/"
 echo ""
 warn "Next steps:"
 warn "  1. Run 'claude' to authenticate with your Anthropic API key"
