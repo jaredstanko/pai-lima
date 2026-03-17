@@ -12,9 +12,10 @@ PAI + PAI Companion running on a Lima VM (Ubuntu 24.04 ARM64) with audio passthr
 
 ## Prerequisites
 
-- macOS 13+ (Ventura or later)
+- macOS 14+ (Sonoma or later)
 - Apple Silicon (M1/M2/M3/M4)
 - [Homebrew](https://brew.sh) (recommended) or manual install
+- [cmux](https://www.cmux.dev/) — terminal app for managing AI agent sessions
 - An Anthropic API key for Claude Code
 
 ## Quick Start
@@ -24,8 +25,8 @@ PAI + PAI Companion running on a Lima VM (Ubuntu 24.04 ARM64) with audio passthr
 git clone https://github.com/quinn-pai/pai-lima.git
 cd pai-lima
 
-# 2. Install Lima
-brew install lima
+# 2. Install Lima and cmux
+brew install lima cmux
 
 # 3. Create host directories for shared mounts
 mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}
@@ -38,6 +39,9 @@ limactl start pai
 limactl cp install.sh pai:~/install.sh
 limactl shell pai
 bash ~/install.sh
+
+# 6. Launch PAI (from your Mac, after install finishes)
+./launch.sh
 ```
 
 ## Installing Lima
@@ -185,6 +189,40 @@ sudo speaker-test -D plughw:1,0 -t sine -f 440 -l 1 -p 2
 > sudo apt-get install -y linux-modules-extra-$(uname -r)
 > sudo modprobe virtio_snd
 > ```
+
+## Using cmux
+
+[cmux](https://www.cmux.dev/) is a native macOS terminal app built for AI agent workflows. It provides visual notifications when Claude needs input, split panes, and an embedded browser — much friendlier than raw Terminal.app.
+
+### Daily use
+
+After initial setup, just run:
+
+```bash
+cd pai-lima
+./launch.sh
+```
+
+This will:
+1. Start the PAI VM if it's not already running
+2. Open cmux with a **PAI** workspace
+3. Left pane: VM shell ready for `claude`
+4. Right pane: monitoring / extra terminal
+
+### cmux tips
+
+- **Notification rings** light up when Claude is waiting for input
+- **Cmd+D** / **Cmd+Shift+D** to split panes horizontally/vertically
+- **Cmd+[** / **Cmd+]** to switch between panes
+- Workspaces show in the sidebar with git branch and working directory
+
+### Install cmux
+
+```bash
+brew install cmux
+```
+
+Or download the DMG from [cmux.dev](https://www.cmux.dev/).
 
 ## VM Management
 

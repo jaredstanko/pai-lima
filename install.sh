@@ -35,7 +35,14 @@ echo -e "${NC}"
 # -----------------------------------------------------------
 log "Installing system packages..."
 sudo apt-get update -qq
-sudo apt-get install -y -qq curl git zip jq tree tmux wget whois dnsutils imagemagick ffmpeg python3-venv nodejs npm
+sudo apt-get install -y -qq \
+  jq fzf ripgrep fd-find sqlite3 tmux bat \
+  yt-dlp ffmpeg \
+  curl wget imagemagick \
+  nmap whois dnsutils net-tools traceroute mtr \
+  texlive-latex-base texlive-fonts-recommended pandoc \
+  golang-go python3 python3-pip python3-venv build-essential git \
+  zip tree nodejs npm
 
 # -----------------------------------------------------------
 # Step 2: Bun
