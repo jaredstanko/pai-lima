@@ -45,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastSessionsOutput: String = ""
 
     // Constants
-    private let vmName = "linux"
+    private let vmName = "pai"
     private let portalURL = "http://localhost:8080"
     private let openWorkspacesTag = 99
     private let portalMenuTag = 100
