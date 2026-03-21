@@ -320,23 +320,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 sessions = []
             }
 
+            let wasRunning = self.isCmuxRunning()
             self.ensureCmuxRunning()
 
             if sessions.isEmpty {
                 // No active sessions — create default "pai" workspace with Claude Code
-                self.openCmuxWorkspace(
-                    command: "limactl shell \(self.vmName) -- tmux new-session -As pai",
-                    name: "pai"
-                )
-                Thread.sleep(forTimeInterval: 0.5)
-                let (_, _) = self.runProcess("/usr/bin/env", args: ["cmux", "send", "bun /home/claude/.claude/PAI/Tools/pai.ts\n"], timeout: 5)
+                // The command shells into the VM, starts tmux, then launches PAI
+                let paiCmd = "limactl shell \(self.vmName) -- tmux new-session -As pai \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
+                if wasRunning {
+                    self.openCmuxWorkspace(command: paiCmd, name: "pai")
+                } else {
+                    // cmux just launched — replace its default workspace instead of creating a second one
+                    self.replaceDefaultWorkspace(command: paiCmd, name: "pai")
+                }
             } else {
                 // Restore one cmux tab per active session
+                var isFirst = !wasRunning
                 for name in sessions {
-                    self.openCmuxWorkspace(
-                        command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)",
-                        name: name
-                    )
+                    let command = "limactl shell \(self.vmName) -- tmux new-session -As \(name)"
+                    if isFirst {
+                        // Replace cmux's default workspace with the first session
+                        self.replaceDefaultWorkspace(command: command, name: name)
+                        isFirst = false
+                    } else {
+                        self.openCmuxWorkspace(command: command, name: name)
+                    }
                     Thread.sleep(forTimeInterval: 0.3)
                 }
             }
@@ -383,9 +391,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             self.ensureCmuxRunning()
-            self.openCmuxWorkspace(command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)", name: name)
-            Thread.sleep(forTimeInterval: 0.5)
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["cmux", "send", "bun /home/claude/.claude/PAI/Tools/pai.ts\n"], timeout: 5)
+            // Shell into VM, start tmux session, and launch PAI
+            let paiCmd = "limactl shell \(self.vmName) -- tmux new-session -As \(name) \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
+            self.openCmuxWorkspace(command: paiCmd, name: name)
         }
     }
 
@@ -401,19 +409,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - cmux Helpers
 
+    private func isCmuxRunning() -> Bool {
+        let (exitCode, _) = runProcess("/usr/bin/pgrep", args: ["-x", "cmux"], timeout: 5)
+        return exitCode == 0
+    }
+
     private func ensureCmuxRunning() {
         let openTask = Process()
         openTask.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         openTask.arguments = ["-a", "cmux"]
         try? openTask.run()
         openTask.waitUntilExit()
-        Thread.sleep(forTimeInterval: 0.5)
+        Thread.sleep(forTimeInterval: 1.0)
     }
 
     private func openCmuxWorkspace(command: String, name: String) {
         let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "new-workspace", "--command", command], timeout: 10)
         Thread.sleep(forTimeInterval: 0.3)
         let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "rename-workspace", name], timeout: 5)
+    }
+
+    /// Replace cmux's default workspace (created on fresh launch) with our command
+    private func replaceDefaultWorkspace(command: String, name: String) {
+        // Send the command to the default workspace's terminal, then rename it
+        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "send", "--workspace", "workspace:1", command + "\n"], timeout: 10)
+        Thread.sleep(forTimeInterval: 0.3)
+        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "rename-workspace", "--workspace", "workspace:1", name], timeout: 5)
     }
 
     private func refreshSessions() {
