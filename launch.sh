@@ -34,6 +34,12 @@ if [ "$VM_STATUS" != "Running" ]; then
   limactl start pai
 fi
 
+# Track whether cmux was already running (to handle default workspace)
+CMUX_WAS_RUNNING=false
+if pgrep -x cmux &>/dev/null; then
+  CMUX_WAS_RUNNING=true
+fi
+
 # Launch cmux if not already running
 open -a cmux 2>/dev/null || true
 sleep 1
@@ -41,15 +47,39 @@ sleep 1
 # Helper: create a cmux workspace with a persistent tmux session in the VM
 create_session() {
   local name="$1"
-  cmux new-workspace --command "limactl shell pai -- tmux new-session -As ${name}"
+  local with_pai="${2:-false}"
+  local cmd="limactl shell pai -- tmux new-session -As ${name}"
+  if [ "$with_pai" = "true" ]; then
+    cmd="limactl shell pai -- tmux new-session -As ${name} \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
+  fi
+  cmux new-workspace --command "$cmd"
   sleep 0.5
   cmux rename-workspace "$name"
 }
 
+# Helper: replace cmux's default workspace (avoids extra host-shell tab on fresh launch)
+replace_default_workspace() {
+  local name="$1"
+  local with_pai="${2:-false}"
+  local cmd="limactl shell pai -- tmux new-session -As ${name}"
+  if [ "$with_pai" = "true" ]; then
+    cmd="limactl shell pai -- tmux new-session -As ${name} \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
+  fi
+  cmux send --workspace workspace:1 "${cmd}\n"
+  sleep 0.5
+  cmux rename-workspace --workspace workspace:1 "$name"
+}
+
 if [ $# -gt 0 ]; then
   # Named sessions mode: create a workspace for each argument
+  FIRST=true
   for name in "$@"; do
-    create_session "$name"
+    if [ "$FIRST" = true ] && [ "$CMUX_WAS_RUNNING" = false ]; then
+      replace_default_workspace "$name" true
+      FIRST=false
+    else
+      create_session "$name" true
+    fi
   done
   echo ""
   echo "Sessions launched: $*"
@@ -59,17 +89,27 @@ else
 
   if [ -n "$SESSIONS" ]; then
     echo "Restoring active workspaces..."
+    FIRST=true
     while IFS= read -r name; do
       [ -z "$name" ] && continue
       echo "  → $name"
-      create_session "$name"
+      if [ "$FIRST" = true ] && [ "$CMUX_WAS_RUNNING" = false ]; then
+        replace_default_workspace "$name"
+        FIRST=false
+      else
+        create_session "$name"
+      fi
     done <<< "$SESSIONS"
     echo ""
     echo "Restored $(echo "$SESSIONS" | grep -c .) workspace(s)."
   else
-    # No active sessions — create default
+    # No active sessions — create default with PAI auto-started
     echo "No active sessions found. Creating default workspace..."
-    create_session "pai"
+    if [ "$CMUX_WAS_RUNNING" = false ]; then
+      replace_default_workspace "pai" true
+    else
+      create_session "pai" true
+    fi
     echo ""
     echo "Default 'pai' workspace created."
   fi
