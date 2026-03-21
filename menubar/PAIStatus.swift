@@ -10,6 +10,28 @@ enum VMState: String {
     case unknown = "Unknown"
 }
 
+// MARK: - Status Dot View (bypasses menubar vibrancy)
+
+class StatusDotView: NSView {
+    var dotColor: NSColor = .systemGray {
+        didSet { needsDisplay = true }
+    }
+
+    override var allowsVibrancy: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        dotColor.setFill()
+        let dotSize: CGFloat = 8
+        let dotRect = NSRect(
+            x: (bounds.width - dotSize) / 2,
+            y: (bounds.height - dotSize) / 2,
+            width: dotSize,
+            height: dotSize
+        )
+        NSBezierPath(ovalIn: dotRect).fill()
+    }
+}
+
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -23,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastSessionsOutput: String = ""
 
     // Constants
-    private let vmName = "pai"
+    private let vmName = "linux"
     private let portalURL = "http://localhost:8080"
     private let openWorkspacesTag = 99
     private let portalMenuTag = 100
@@ -129,31 +151,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Icon Updates
 
+    private var dotView: StatusDotView?
+    private var lastRenderedState: VMState?
+    private var cachedSymbols: [String: NSImage] = [:]
+
     private func updateIcon() {
         guard let button = statusItem.button else { return }
+        guard vmState != lastRenderedState else { return }
+        lastRenderedState = vmState
 
-        let symbolName: String
-        switch vmState {
-        case .running:
-            symbolName = "desktopcomputer"
-        case .stopped:
-            symbolName = "desktopcomputer"
-        case .starting, .stopping:
-            symbolName = "desktopcomputer"
-        case .unknown:
-            symbolName = "desktopcomputer.trianglebadge.exclamationmark"
+        // SF Symbol (cached) adapts to menubar appearance
+        let symbolName = vmState == .unknown
+            ? "desktopcomputer.trianglebadge.exclamationmark"
+            : "desktopcomputer"
+
+        let symbol: NSImage
+        if let cached = cachedSymbols[symbolName] {
+            symbol = cached
+        } else if let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: "PAI VM") {
+            img.isTemplate = true
+            cachedSymbols[symbolName] = img
+            symbol = img
+        } else {
+            return
         }
 
-        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "PAI VM \(vmState.rawValue)")
-        button.image?.isTemplate = true
+        button.image = symbol
+        button.imagePosition = .imageLeft
+        button.title = "  "
 
-        // Use color tint for state — green dot for running, nothing for stopped
-        if vmState == .running {
-            button.title = " ●"
-        } else if vmState == .starting || vmState == .stopping {
-            button.title = " ◌"
-        } else {
-            button.title = ""
+        // Colored dot via custom NSView with allowsVibrancy=false
+        let color: NSColor
+        switch vmState {
+        case .running:             color = .systemGreen
+        case .stopped:             color = .systemRed
+        case .starting, .stopping: color = .systemYellow
+        case .unknown:             color = .systemGray
+        }
+
+        if dotView == nil {
+            let dv = StatusDotView(frame: NSRect(x: 0, y: 0, width: 12, height: 22))
+            button.addSubview(dv)
+            dotView = dv
+        }
+        dotView?.dotColor = color
+        // Defer positioning to after layout pass (bounds may be zero on first call)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let button = self.statusItem?.button, let dv = self.dotView else { return }
+            let x = button.bounds.width - 14
+            let y = (button.bounds.height - 22) / 2
+            dv.frame = NSRect(x: x, y: y, width: 12, height: 22)
         }
     }
 
@@ -208,7 +255,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return status == "Running" ? .running : .stopped
         }
 
-        return .stopped // VM "pai" not found = not created
+        return .stopped // VM not found = not created
     }
 
     // MARK: - VM Control
@@ -229,7 +276,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "start", "pai"], timeout: 120)
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "start", self.vmName], timeout: 120)
 
             DispatchQueue.main.async {
                 self.checkVMStatus()
@@ -245,7 +292,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "stop", "pai"], timeout: 60)
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "stop", self.vmName], timeout: 60)
 
             DispatchQueue.main.async {
                 self.checkVMStatus()
