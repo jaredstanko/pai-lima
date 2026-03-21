@@ -1,25 +1,29 @@
 #!/bin/bash
-# PAI Lima — cmux launcher
-# Opens cmux with a pre-configured workspace for the PAI VM.
+# PAI Lima — cmux launcher with persistent tmux sessions
+# Opens cmux and restores all active workspaces from the VM.
+# If no sessions exist, creates a default "pai" workspace.
 #
 # Usage:
-#   ./launch.sh
+#   ./launch.sh              # Restore all active sessions (or create default)
+#   ./launch.sh work         # Launch specific named session(s)
+#   ./launch.sh a b c        # Launch multiple named sessions
 #
 # Prerequisites:
-#   - cmux installed (brew install cmux)
-#   - Lima VM "pai" created and started
+#   - cmux installed (brew install --cask cmux)
+#   - Lima VM "pai" created and started (setup-host.sh handles this)
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Check prerequisites
 if ! command -v cmux &>/dev/null; then
-  echo "cmux not found. Install it: brew install cmux"
-  echo "Or download from https://www.cmux.dev/"
+  echo "cmux not found. Run ./setup-host.sh first, or: brew install --cask cmux"
   exit 1
 fi
 
 if ! command -v limactl &>/dev/null; then
-  echo "Lima not found. Install it: brew install lima"
+  echo "Lima not found. Run ./setup-host.sh first, or: brew install lima"
   exit 1
 fi
 
@@ -30,33 +34,48 @@ if [ "$VM_STATUS" != "Running" ]; then
   limactl start pai
 fi
 
-# Get VM IP for portal URL
-VM_IP=$(limactl shell pai -- hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
-
 # Launch cmux if not already running
 open -a cmux 2>/dev/null || true
-sleep 2
-
-# Create the PAI workspace with Claude Code shell
-cmux new-workspace --title "PAI"
-sleep 0.5
-cmux send "limactl shell pai\n"
 sleep 1
-cmux send "source ~/.bashrc 2>/dev/null; clear\n"
-sleep 0.5
-cmux send "echo '═══ PAI VM Ready ═══  Type: claude'\n"
 
-# Split right — portal/monitoring pane
-cmux new-split --direction right
-sleep 0.5
-cmux send "limactl shell pai\n"
-sleep 1
-cmux send "source ~/.bashrc 2>/dev/null; clear\n"
-sleep 0.5
-cmux send "echo '═══ Monitoring ═══  Portal: http://${VM_IP}:8080'\n"
+# Helper: create a cmux workspace with a persistent tmux session in the VM
+create_session() {
+  local name="$1"
+  cmux new-workspace --command "limactl shell pai -- tmux new-session -As ${name}"
+  sleep 0.5
+  cmux rename-workspace "$name"
+}
+
+if [ $# -gt 0 ]; then
+  # Named sessions mode: create a workspace for each argument
+  for name in "$@"; do
+    create_session "$name"
+  done
+  echo ""
+  echo "Sessions launched: $*"
+else
+  # Auto-restore mode: query VM for all active tmux sessions
+  SESSIONS=$(limactl shell pai -- tmux list-sessions -F '#{session_name}' 2>/dev/null || echo "")
+
+  if [ -n "$SESSIONS" ]; then
+    echo "Restoring active workspaces..."
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      echo "  → $name"
+      create_session "$name"
+    done <<< "$SESSIONS"
+    echo ""
+    echo "Restored $(echo "$SESSIONS" | grep -c .) workspace(s)."
+  else
+    # No active sessions — create default
+    echo "No active sessions found. Creating default workspace..."
+    create_session "pai"
+    echo ""
+    echo "Default 'pai' workspace created."
+  fi
+fi
 
 echo ""
-echo "PAI workspace ready in cmux."
-echo "  Left pane:  Claude Code (type 'claude' to start)"
-echo "  Right pane: Monitoring / extra terminal"
-echo "  Portal:     http://${VM_IP}:8080"
+echo "Portal: http://localhost:8080"
+echo "Sessions are persistent — rerun this script to reattach."
+echo "Add more: ./session.sh <name>"

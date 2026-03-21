@@ -1,0 +1,527 @@
+import Cocoa
+
+// MARK: - VM State
+
+enum VMState: String {
+    case running = "Running"
+    case stopped = "Stopped"
+    case starting = "Starting…"
+    case stopping = "Stopping…"
+    case unknown = "Unknown"
+}
+
+// MARK: - App Delegate
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private var statusMenuItem: NSMenuItem!
+    private var startStopMenuItem: NSMenuItem!
+    private var sessionsSubmenu: NSMenu!
+    private var newSessionMenuItem: NSMenuItem!
+    private var timer: Timer?
+    private var vmState: VMState = .unknown
+    private var lastSessionsOutput: String = ""
+
+    // Constants
+    private let vmName = "pai"
+    private let portalURL = "http://localhost:8080"
+    private let openWorkspacesTag = 99
+    private let portalMenuTag = 100
+    private let terminalMenuTag = 101
+
+    // Paths — limactl and cmux are in /opt/homebrew/bin on Apple Silicon
+    private let env: [String: String] = {
+        var e = ProcessInfo.processInfo.environment
+        let home = NSHomeDirectory()
+        let extra = [
+            "/opt/homebrew/bin",
+            "\(home)/.bun/bin",
+            "/usr/local/bin"
+        ]
+        e["PATH"] = extra.joined(separator: ":") + ":" + (e["PATH"] ?? "/usr/bin:/bin")
+        e["HOME"] = home
+        return e
+    }()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        updateIcon()
+        setupMenu()
+
+        // Initial status check + periodic polling
+        checkVMStatus()
+        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkVMStatus()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        timer?.invalidate()
+    }
+
+    // MARK: - Menu Setup
+
+    private func setupMenu() {
+        let menu = NSMenu()
+
+        // Status line
+        statusMenuItem = NSMenuItem(title: "VM: Checking…", action: nil, keyEquivalent: "")
+        statusMenuItem.isEnabled = false
+        menu.addItem(statusMenuItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Start / Stop
+        startStopMenuItem = NSMenuItem(title: "Start VM", action: #selector(toggleVM), keyEquivalent: "s")
+        startStopMenuItem.target = self
+        menu.addItem(startStopMenuItem)
+
+        // Open Workspaces — primary action: opens cmux with all active sessions
+        let openWorkspacesItem = NSMenuItem(title: "Open Workspaces", action: #selector(openWorkspaces), keyEquivalent: "o")
+        openWorkspacesItem.target = self
+        openWorkspacesItem.tag = openWorkspacesTag
+        menu.addItem(openWorkspacesItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // New Claude Session
+        newSessionMenuItem = NSMenuItem(title: "New Claude Session…", action: #selector(newSession), keyEquivalent: "n")
+        newSessionMenuItem.target = self
+        menu.addItem(newSessionMenuItem)
+
+        // Active Sessions submenu
+        let sessionsItem = NSMenuItem(title: "Active Sessions", action: nil, keyEquivalent: "")
+        sessionsSubmenu = NSMenu()
+        sessionsItem.submenu = sessionsSubmenu
+        menu.addItem(sessionsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Open Portal
+        let portalItem = NSMenuItem(title: "Open Portal", action: #selector(openPortal), keyEquivalent: "p")
+        portalItem.target = self
+        portalItem.tag = portalMenuTag
+        menu.addItem(portalItem)
+
+        // Open in Terminal (plain shell)
+        let terminalItem = NSMenuItem(title: "Open in Terminal", action: #selector(openTerminal), keyEquivalent: "t")
+        terminalItem.target = self
+        terminalItem.tag = terminalMenuTag
+        menu.addItem(terminalItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Launch at Login
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = isLaunchAtLoginEnabled() ? .on : .off
+        menu.addItem(loginItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Quit
+        let quitItem = NSMenuItem(title: "Quit PAI Status", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+    }
+
+    // MARK: - Icon Updates
+
+    private func updateIcon() {
+        guard let button = statusItem.button else { return }
+
+        let symbolName: String
+        switch vmState {
+        case .running:
+            symbolName = "desktopcomputer"
+        case .stopped:
+            symbolName = "desktopcomputer"
+        case .starting, .stopping:
+            symbolName = "desktopcomputer"
+        case .unknown:
+            symbolName = "desktopcomputer.trianglebadge.exclamationmark"
+        }
+
+        button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "PAI VM \(vmState.rawValue)")
+        button.image?.isTemplate = true
+
+        // Use color tint for state — green dot for running, nothing for stopped
+        if vmState == .running {
+            button.title = " ●"
+        } else if vmState == .starting || vmState == .stopping {
+            button.title = " ◌"
+        } else {
+            button.title = ""
+        }
+    }
+
+    // MARK: - VM Status Polling
+
+    private func checkVMStatus() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            let state = self.queryVMState()
+
+            DispatchQueue.main.async {
+                // Don't override transient states (starting/stopping) with polled results
+                // unless the transient state has resolved
+                if self.vmState == .starting && state == .running {
+                    self.vmState = .running
+                } else if self.vmState == .stopping && state == .stopped {
+                    self.vmState = .stopped
+                } else if self.vmState != .starting && self.vmState != .stopping {
+                    self.vmState = state
+                }
+
+                self.statusMenuItem.title = "VM: \(self.vmState.rawValue)"
+                self.startStopMenuItem.title = self.vmState == .running ? "Stop VM" : "Start VM"
+                self.startStopMenuItem.isEnabled = (self.vmState != .starting && self.vmState != .stopping)
+                self.newSessionMenuItem.isEnabled = (self.vmState == .running)
+                // Enable/disable portal and terminal items based on VM state
+                if let menu = self.statusItem.menu {
+                    let running = (self.vmState == .running)
+                    menu.item(withTag: self.openWorkspacesTag)?.isEnabled = running
+                    menu.item(withTag: self.portalMenuTag)?.isEnabled = running
+                    menu.item(withTag: self.terminalMenuTag)?.isEnabled = running
+                }
+                self.updateIcon()
+                self.refreshSessions()
+            }
+        }
+    }
+
+    private func queryVMState() -> VMState {
+        let (exitCode, output) = runProcess("/usr/bin/env", args: ["limactl", "list", "--json"], timeout: 10)
+        guard exitCode == 0, let output = output else { return .unknown }
+
+        // limactl list --json outputs one JSON object per line
+        for line in output.components(separatedBy: "\n") {
+            guard !line.isEmpty,
+                  let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let name = json["name"] as? String,
+                  name == vmName,
+                  let status = json["status"] as? String else { continue }
+
+            return status == "Running" ? .running : .stopped
+        }
+
+        return .stopped // VM "pai" not found = not created
+    }
+
+    // MARK: - VM Control
+
+    @objc private func toggleVM() {
+        if vmState == .running {
+            stopVM()
+        } else {
+            startVM()
+        }
+    }
+
+    private func startVM() {
+        vmState = .starting
+        statusMenuItem.title = "VM: \(vmState.rawValue)"
+        startStopMenuItem.isEnabled = false
+        updateIcon()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "start", "pai"], timeout: 120)
+
+            DispatchQueue.main.async {
+                self.checkVMStatus()
+            }
+        }
+    }
+
+    private func stopVM() {
+        vmState = .stopping
+        statusMenuItem.title = "VM: \(vmState.rawValue)"
+        startStopMenuItem.isEnabled = false
+        updateIcon()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "stop", "pai"], timeout: 60)
+
+            DispatchQueue.main.async {
+                self.checkVMStatus()
+            }
+        }
+    }
+
+    // MARK: - Open Workspaces
+
+    @objc private func openWorkspaces() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            // Query VM for all active tmux sessions
+            let (exitCode, output) = self.runProcess(
+                "/usr/bin/env",
+                args: ["limactl", "shell", self.vmName, "--", "tmux", "list-sessions", "-F", "#{session_name}"],
+                timeout: 10
+            )
+
+            let sessions: [String]
+            if exitCode == 0, let output = output, !output.isEmpty {
+                sessions = output.components(separatedBy: "\n").filter { !$0.isEmpty }
+            } else {
+                sessions = []
+            }
+
+            self.ensureCmuxRunning()
+
+            if sessions.isEmpty {
+                // No active sessions — create default "pai" workspace with Claude Code
+                self.openCmuxWorkspace(
+                    command: "limactl shell \(self.vmName) -- tmux new-session -As pai",
+                    name: "pai"
+                )
+                Thread.sleep(forTimeInterval: 0.5)
+                let (_, _) = self.runProcess("/usr/bin/env", args: ["cmux", "send", "bun /home/claude/.claude/PAI/Tools/pai.ts\n"], timeout: 5)
+            } else {
+                // Restore one cmux tab per active session
+                for name in sessions {
+                    self.openCmuxWorkspace(
+                        command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)",
+                        name: name
+                    )
+                    Thread.sleep(forTimeInterval: 0.3)
+                }
+            }
+        }
+    }
+
+    // MARK: - Portal & Terminal
+
+    @objc private func openPortal() {
+        if let url = URL(string: portalURL) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func openTerminal() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.ensureCmuxRunning()
+            self.openCmuxWorkspace(command: "limactl shell \(self.vmName)", name: "shell")
+        }
+    }
+
+    // MARK: - Session Management
+
+    @objc private func newSession() {
+        let alert = NSAlert()
+        alert.messageText = "New Claude Session"
+        alert.informativeText = "Enter a name for the tmux session:"
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        let timestamp = Int(Date().timeIntervalSince1970) % 10000
+        input.stringValue = "claude-\(timestamp)"
+        alert.accessoryView = input
+        alert.window.initialFirstResponder = input
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+
+        let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.ensureCmuxRunning()
+            self.openCmuxWorkspace(command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)", name: name)
+            Thread.sleep(forTimeInterval: 0.5)
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["cmux", "send", "bun /home/claude/.claude/PAI/Tools/pai.ts\n"], timeout: 5)
+        }
+    }
+
+    @objc private func attachToSession(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.ensureCmuxRunning()
+            self.openCmuxWorkspace(command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)", name: name)
+        }
+    }
+
+    // MARK: - cmux Helpers
+
+    private func ensureCmuxRunning() {
+        let openTask = Process()
+        openTask.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        openTask.arguments = ["-a", "cmux"]
+        try? openTask.run()
+        openTask.waitUntilExit()
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
+    private func openCmuxWorkspace(command: String, name: String) {
+        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "new-workspace", "--command", command], timeout: 10)
+        Thread.sleep(forTimeInterval: 0.3)
+        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "rename-workspace", name], timeout: 5)
+    }
+
+    private func refreshSessions() {
+        guard vmState == .running else {
+            sessionsSubmenu.removeAllItems()
+            let item = NSMenuItem(title: "(VM not running)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            sessionsSubmenu.addItem(item)
+            lastSessionsOutput = ""
+            return
+        }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            let (exitCode, output) = self.runProcess(
+                "/usr/bin/env",
+                args: ["limactl", "shell", self.vmName, "--", "tmux", "list-sessions", "-F", "#{session_name}: #{session_windows} windows (#{session_attached} attached)"],
+                timeout: 5
+            )
+
+            let currentOutput = (exitCode == 0 ? output : nil) ?? ""
+
+            DispatchQueue.main.async {
+                // Skip rebuild if output unchanged
+                guard currentOutput != self.lastSessionsOutput else { return }
+                self.lastSessionsOutput = currentOutput
+
+                self.sessionsSubmenu.removeAllItems()
+
+                guard !currentOutput.isEmpty else {
+                    let item = NSMenuItem(title: "(no active sessions)", action: nil, keyEquivalent: "")
+                    item.isEnabled = false
+                    self.sessionsSubmenu.addItem(item)
+                    return
+                }
+
+                for line in currentOutput.components(separatedBy: "\n") where !line.isEmpty {
+                    let sessionName = line.components(separatedBy: ":").first ?? line
+                    let item = NSMenuItem(title: line, action: #selector(self.attachToSession(_:)), keyEquivalent: "")
+                    item.target = self
+                    item.representedObject = sessionName
+                    self.sessionsSubmenu.addItem(item)
+                }
+            }
+        }
+    }
+
+    // MARK: - Launch at Login
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        let enable = sender.state == .off
+        setLaunchAtLogin(enabled: enable)
+        sender.state = enable ? .on : .off
+    }
+
+    private let launchAgentLabel = "com.pai.status"
+
+    private var launchAgentPath: String {
+        NSHomeDirectory() + "/Library/LaunchAgents/\(launchAgentLabel).plist"
+    }
+
+    private func isLaunchAtLoginEnabled() -> Bool {
+        FileManager.default.fileExists(atPath: launchAgentPath)
+    }
+
+    private func setLaunchAtLogin(enabled: Bool) {
+        if enabled {
+            let appPath = Bundle.main.bundlePath
+            let plist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>Label</key>
+                <string>\(launchAgentLabel)</string>
+                <key>ProgramArguments</key>
+                <array>
+                    <string>/usr/bin/open</string>
+                    <string>-a</string>
+                    <string>\(appPath)</string>
+                </array>
+                <key>RunAtLoad</key>
+                <true/>
+                <key>KeepAlive</key>
+                <false/>
+            </dict>
+            </plist>
+            """
+
+            do {
+                let dir = NSHomeDirectory() + "/Library/LaunchAgents"
+                try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+                try plist.write(toFile: launchAgentPath, atomically: true, encoding: .utf8)
+
+                let task = Process()
+                task.launchPath = "/bin/launchctl"
+                task.arguments = ["load", launchAgentPath]
+                try task.run()
+                task.waitUntilExit()
+            } catch { }
+        } else {
+            do {
+                let task = Process()
+                task.launchPath = "/bin/launchctl"
+                task.arguments = ["unload", launchAgentPath]
+                try task.run()
+                task.waitUntilExit()
+                try FileManager.default.removeItem(atPath: launchAgentPath)
+            } catch { }
+        }
+    }
+
+    // MARK: - Quit
+
+    @objc private func quitApp() {
+        NSApplication.shared.terminate(self)
+    }
+
+    // MARK: - Process Helper
+
+    private func runProcess(_ executable: String, args: [String], timeout: TimeInterval) -> (Int32, String?) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = args
+        task.environment = env
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+        } catch {
+            return (-1, nil)
+        }
+
+        // Timeout handling
+        let deadline = DispatchTime.now() + timeout
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline) {
+            if task.isRunning { task.terminate() }
+        }
+
+        task.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return (task.terminationStatus, output)
+    }
+}
+
+// MARK: - Main Entry Point
+
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory) // No dock icon
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
