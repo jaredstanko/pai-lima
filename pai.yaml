@@ -41,6 +41,15 @@ mounts:
     mountPoint: "/home/claude/upstream"
     writable: true
 
+# Networking: vzNAT gives the guest a routable IP from the host.
+# portForwards maps guest 8080 → localhost:8080 for the portal.
+networks:
+  - vzNAT: true
+
+portForwards:
+  - guestPort: 8080
+    hostIP: "127.0.0.1"
+
 # Audio: VZ virtio sound device → macOS host speakers
 audio:
   device: vz
