@@ -7,13 +7,13 @@
 #   - PAI-Status menu bar app (rebuilt from source)
 #   - Portal bookmark on Desktop
 #   - VM networking (adds vzNAT + port forwarding if missing)
-#   - VM-side tools and aliases (re-runs provision-vm.sh in safe mode)
+#   - VM-side tools, aliases, and .bashrc environment
+#   - Claude Code (migrates npm→native if needed, runs claude update)
 #
 # What this does NOT touch:
 #   - Your data in ~/pai-workspace/
-#   - Your Claude Code authentication
+#   - Your Claude Code authentication and sessions
 #   - Your PAI configuration (~/.claude/ inside the VM)
-#   - Your Claude Code sessions
 #   - Your work/ directory
 #
 # Usage:
@@ -23,7 +23,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STEP=0
-TOTAL=6
+TOTAL=7
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -184,7 +184,31 @@ ENVBLOCK
 '
 ok "VM environment and packages updated"
 
-# ─── Step 5: Rebuild menu bar app ─────────────────────────────
+# ─── Step 5: Upgrade Claude Code in VM ────────────────────────
+
+step "Upgrading Claude Code in VM..."
+
+limactl shell pai -- bash -lc '
+  CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "")
+
+  if [ -z "$CLAUDE_PATH" ]; then
+    echo "[!] Claude Code not found — installing native..."
+    curl -fsSL https://claude.ai/install.sh | bash
+  elif echo "$CLAUDE_PATH" | grep -qE "node_modules|npm|lib/node_modules"; then
+    echo "[!] Claude Code installed via npm (old method): $CLAUDE_PATH"
+    echo "[!] Removing npm version and installing native..."
+    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+    bun remove -g @anthropic-ai/claude-code 2>/dev/null || true
+    curl -fsSL https://claude.ai/install.sh | bash
+  else
+    echo "[=] Claude Code already native: $CLAUDE_PATH"
+    echo "[+] Running claude update..."
+    claude update 2>/dev/null || echo "[!] claude update not available — already latest or manual update needed"
+  fi
+'
+ok "Claude Code up to date"
+
+# ─── Step 6: Rebuild menu bar app ─────────────────────────────
 
 step "Rebuilding PAI-Status menu bar app..."
 
@@ -197,7 +221,7 @@ open /Applications/PAI-Status.app 2>/dev/null || true
 ok "PAI-Status running"
 cd "$SCRIPT_DIR"
 
-# ─── Step 6: Update portal bookmark ──────────────────────────
+# ─── Step 7: Update portal bookmark ──────────────────────────
 
 step "Updating portal bookmark..."
 

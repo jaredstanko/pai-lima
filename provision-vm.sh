@@ -63,10 +63,25 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 # -----------------------------------------------------------
 # Step 3: Claude Code
 # -----------------------------------------------------------
+# Detect if claude is installed via npm (old method) vs native installer
+CLAUDE_NEEDS_INSTALL=false
 if command -v claude &>/dev/null; then
-  log "Claude Code already installed: $(claude --version 2>/dev/null || echo 'installed')"
+  CLAUDE_PATH=$(command -v claude)
+  if [[ "$CLAUDE_PATH" == *"node_modules"* ]] || [[ "$CLAUDE_PATH" == *"npm"* ]] || [[ "$CLAUDE_PATH" == *"lib/node_modules"* ]]; then
+    warn "Claude Code is installed via npm (old method): $CLAUDE_PATH"
+    warn "Removing npm version and installing native..."
+    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+    bun remove -g @anthropic-ai/claude-code 2>/dev/null || true
+    CLAUDE_NEEDS_INSTALL=true
+  else
+    log "Claude Code already installed (native): $(claude --version 2>/dev/null || echo 'installed')"
+  fi
 else
-  log "Installing Claude Code..."
+  CLAUDE_NEEDS_INSTALL=true
+fi
+
+if [ "$CLAUDE_NEEDS_INSTALL" = true ]; then
+  log "Installing Claude Code (native installer)..."
   curl -fsSL https://claude.ai/install.sh | bash
 fi
 
