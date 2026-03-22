@@ -7,7 +7,7 @@
 #   - PAI-Status menu bar app (rebuilt from source)
 #   - Portal bookmark on Desktop
 #   - VM networking (adds vzNAT + port forwarding if missing)
-#   - VM-side tools and aliases (re-runs provision.sh in safe mode)
+#   - VM-side tools and aliases (re-runs provision-vm.sh in safe mode)
 #
 # What this does NOT touch:
 #   - Your data in ~/pai-workspace/
@@ -17,7 +17,7 @@
 #   - Your work/ directory
 #
 # Usage:
-#   ./upgrade.sh
+#   ./upgrade-host.sh
 
 set -euo pipefail
 
@@ -132,7 +132,7 @@ fi
 step "Updating VM tools and aliases..."
 
 # Copy latest provision script
-limactl cp "$SCRIPT_DIR/provision.sh" pai:/home/claude/provision.sh
+limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
 # Only update aliases and system packages — don't reinstall PAI or Companion
 limactl shell pai -- bash -c '
