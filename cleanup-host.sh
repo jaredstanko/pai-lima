@@ -30,7 +30,7 @@ echo ""
 
 # ─── 1. Stop and remove Lima VM ──────────────────────────────
 
-echo -e "${CYAN}[1/6]${NC} ${BOLD}Lima VM${NC}"
+echo -e "${CYAN}[1/4]${NC} ${BOLD}Lima VM${NC}"
 
 if command -v limactl &>/dev/null; then
   if limactl list --format '{{.Name}}' 2>/dev/null | grep -q "^pai$"; then
@@ -51,7 +51,7 @@ fi
 
 # ─── 2. Remove PAI-Status menu bar app ───────────────────────
 
-echo -e "${CYAN}[2/6]${NC} ${BOLD}PAI-Status menu bar app${NC}"
+echo -e "${CYAN}[2/4]${NC} ${BOLD}PAI-Status menu bar app${NC}"
 
 # Kill running instances (current and old names)
 osascript -e 'tell application "PAI-Status" to quit' 2>/dev/null || true
@@ -83,7 +83,7 @@ fi
 
 # ─── 3. Remove launch agents ─────────────────────────────────
 
-echo -e "${CYAN}[3/6]${NC} ${BOLD}Launch agents${NC}"
+echo -e "${CYAN}[3/4]${NC} ${BOLD}Launch agents and bookmarks${NC}"
 
 AGENTS=(
   "com.pai.status"
@@ -102,18 +102,6 @@ for agent in "${AGENTS[@]}"; do
     skip "$agent"
   fi
 done
-
-# ─── 4. Remove config files and bookmarks ────────────────────
-
-echo -e "${CYAN}[4/6]${NC} ${BOLD}Config files and bookmarks${NC}"
-
-# kitty config (only the one we installed)
-if [ -f "$HOME/.config/kitty/kitty.conf" ]; then
-  rm -f "$HOME/.config/kitty/kitty.conf"
-  ok "Removed ~/.config/kitty/kitty.conf"
-else
-  skip "kitty.conf"
-fi
 
 # Desktop bookmark
 if [ -f "$HOME/Desktop/PAI Portal.webloc" ]; then
@@ -139,20 +127,9 @@ else
   skip "Audit log"
 fi
 
-# ─── 5. Remove Hack Nerd Font ────────────────────────────────
+# ─── 4. Workspace data (ASKS FIRST) ──────────────────────────
 
-echo -e "${CYAN}[5/6]${NC} ${BOLD}Hack Nerd Font${NC}"
-
-if brew list --cask font-hack-nerd-font &>/dev/null 2>&1; then
-  brew uninstall --cask font-hack-nerd-font 2>/dev/null || true
-  ok "Uninstalled font-hack-nerd-font"
-else
-  skip "font-hack-nerd-font"
-fi
-
-# ─── 6. Workspace data (ASKS FIRST) ──────────────────────────
-
-echo -e "${CYAN}[6/6]${NC} ${BOLD}Workspace data${NC}"
+echo -e "${CYAN}[4/4]${NC} ${BOLD}Workspace data${NC}"
 
 if [ -d "$HOME/pai-workspace" ]; then
   echo ""
@@ -197,13 +174,11 @@ echo "  What was removed:"
 echo "    • Lima VM 'pai'"
 echo "    • PAI-Status menu bar app (all name variants)"
 echo "    • Launch agents"
-echo "    • kitty.conf, Desktop bookmark, bridge token"
-echo "    • Hack Nerd Font"
+echo "    • Desktop bookmark, bridge token, audit log"
 echo ""
 echo "  What was NOT removed:"
-echo "    • Lima itself (brew uninstall lima)"
-echo "    • kitty itself (brew uninstall --cask kitty)"
-echo "    • Homebrew"
+echo "    • Lima, kitty, Hack Nerd Font, Homebrew"
+echo "    • kitty.conf (~/.config/kitty/)"
 echo "    • This repo (pai-lima/)"
 if [ -d "$HOME/pai-workspace" ]; then
   echo "    • ~/pai-workspace/ (you chose to keep it)"
