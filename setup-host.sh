@@ -103,6 +103,14 @@ else
   ok "kitty installed"
 fi
 
+# Install Hack Nerd Font for kitty
+if brew list --cask font-hack-nerd-font &>/dev/null 2>&1; then
+  skip "Hack Nerd Font"
+else
+  brew install --cask font-hack-nerd-font
+  ok "Hack Nerd Font installed"
+fi
+
 # Install kitty configuration
 mkdir -p "$HOME/.config/kitty"
 cp "$SCRIPT_DIR/config/kitty.conf" "$HOME/.config/kitty/kitty.conf"
