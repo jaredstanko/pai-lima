@@ -262,32 +262,21 @@ else
 fi
 log "Directory structure ready."
 
-# --- Phase 3: Portal Server (Bun, no Docker) ---
-log "Phase 3: Setting up portal server..."
+# --- Phase 3: Portal + Voice Servers (no Docker, no TTS) ---
+log "Phase 3: Setting up portal and voice servers..."
 
-# Copy portal public files (homepage, clipboard, exchange UI)
+# Copy companion portal files if available
 if [ -d "$COMPANION_DIR/companion/portal/public" ]; then
-  cp -r "$COMPANION_DIR/companion/portal/public/"* ~/portal/
+  cp -r "$COMPANION_DIR/companion/portal/public/"* ~/portal/ 2>/dev/null || true
   log "Portal public files installed."
-else
-  warn "No portal/public directory found in companion repo."
 fi
-
-# Copy welcome page
 if [ -d "$COMPANION_DIR/companion/welcome" ]; then
-  cp -r "$COMPANION_DIR/companion/welcome" ~/portal/welcome
+  cp -r "$COMPANION_DIR/companion/welcome" ~/portal/welcome 2>/dev/null || true
   log "Welcome page installed."
-else
-  warn "No welcome directory found in companion repo."
 fi
 
-# Use the companion's full server.ts (has exchange API, clipboard, etc.)
-if [ -f "$COMPANION_DIR/companion/portal/server.ts" ]; then
-  cp "$COMPANION_DIR/companion/portal/server.ts" ~/portal/server.ts
-  log "Full portal server.ts installed (exchange, clipboard, routing)."
-else
-  warn "Companion server.ts not found — creating minimal fallback."
-  cat > ~/portal/server.ts <<'SERVE'
+# Create portal server (static files with directory index support)
+cat > ~/portal/serve.ts <<'SERVE'
 const server = Bun.serve({
   port: 8080,
   hostname: "0.0.0.0",
@@ -305,11 +294,11 @@ const server = Bun.serve({
     return new Response("Not Found", { status: 404 });
   },
 });
-console.log(`Portal server running on http://0.0.0.0:${server.port}`);
+console.log(`Portal running on http://0.0.0.0:${server.port}`);
 SERVE
-fi
+log "Portal serve.ts created."
 
-# Create a placeholder index.html if none exists
+# Create placeholder index.html if none exists
 if [ ! -f ~/portal/index.html ]; then
   cat > ~/portal/index.html <<'HTML'
 <!DOCTYPE html>
@@ -330,43 +319,92 @@ if [ ! -f ~/portal/index.html ]; then
   <div class="container">
     <h1>PAI Companion Portal</h1>
     <p class="status">Online</p>
-    <p>Your PAI Companion is running. This portal serves dashboards, reports, and file exchange interfaces created by your AI assistant.</p>
+    <p>Your PAI Companion is running.</p>
   </div>
 </body>
 </html>
 HTML
 fi
 
-# Create systemd user service for the portal
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/pai-portal.service <<UNIT
-[Unit]
-Description=PAI Companion Portal Server
-After=network.target
+# Create voice/notification server (accepts POST /notify, no TTS)
+# PAI hooks call this endpoint — it just logs and returns success
+mkdir -p ~/voice-server
+cat > ~/voice-server/serve.ts <<'VOICE'
+const server = Bun.serve({
+  port: 8888,
+  hostname: "0.0.0.0",
+  async fetch(req) {
+    const headers = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Content-Type": "application/json",
+    };
+    if (req.method === "OPTIONS") return new Response(null, { headers });
+    if (req.url.endsWith("/health")) {
+      return new Response(JSON.stringify({ status: "ok", port: 8888 }), { headers });
+    }
+    if (req.method === "POST" && req.url.endsWith("/notify")) {
+      try {
+        const data = await req.json();
+        const msg = data.message || "(no message)";
+        console.log(`[notify] ${msg.substring(0, 80)}`);
+        return new Response(JSON.stringify({ status: "success" }), { headers });
+      } catch {
+        return new Response(JSON.stringify({ status: "error" }), { headers, status: 400 });
+      }
+    }
+    return new Response(JSON.stringify({ status: "ok", info: "PAI Voice Server" }), { headers });
+  },
+});
+console.log(`Voice server running on http://0.0.0.0:${server.port}`);
+VOICE
+log "Voice serve.ts created."
 
-[Service]
-Type=simple
-WorkingDirectory=%h/portal
-ExecStart=%h/.bun/bin/bun run serve.ts
-Restart=on-failure
-RestartSec=3
-Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+# Create a startup script that launches both servers in background on login
+cat > ~/start-servers.sh <<'STARTUP'
+#!/bin/bash
+# Start PAI portal and voice servers (called from .bashrc on login)
+BUN="$HOME/.bun/bin/bun"
 
-[Install]
-WantedBy=default.target
-UNIT
+# Only start if not already running
+if ! curl -sf http://127.0.0.1:8080/health >/dev/null 2>&1 && [ -f ~/portal/serve.ts ]; then
+  nohup "$BUN" run ~/portal/serve.ts > ~/portal/server.log 2>&1 &
+fi
 
-sudo loginctl enable-linger claude 2>/dev/null || true
-systemctl --user daemon-reload
-systemctl --user enable pai-portal.service
-systemctl --user restart pai-portal.service
+if ! curl -sf http://127.0.0.1:8888/health >/dev/null 2>&1 && [ -f ~/voice-server/serve.ts ]; then
+  nohup "$BUN" run ~/voice-server/serve.ts > ~/voice-server/server.log 2>&1 &
+fi
+STARTUP
+chmod +x ~/start-servers.sh
 
-# Verify portal is running
+# Add to .bashrc so servers start on any login (idempotent)
+STARTUP_SENTINEL="# --- PAI servers (auto-start) ---"
+for rcfile in ~/.bashrc ~/.zshrc; do
+  if [ -f "$rcfile" ] && ! grep -qF "$STARTUP_SENTINEL" "$rcfile" 2>/dev/null; then
+    cat >> "$rcfile" <<RCEOF
+
+$STARTUP_SENTINEL
+[ -f ~/start-servers.sh ] && bash ~/start-servers.sh
+# --- end PAI servers ---
+RCEOF
+  fi
+done
+
+# Start them now
+bash ~/start-servers.sh
+
+# Verify
 sleep 2
 if curl -sf http://127.0.0.1:8080/ >/dev/null 2>&1; then
   log "Portal server running on port 8080."
 else
-  warn "Portal server may not be running. Check: systemctl --user status pai-portal"
+  warn "Portal server not responding on 8080."
+fi
+if curl -sf http://127.0.0.1:8888/health >/dev/null 2>&1; then
+  log "Voice server running on port 8888."
+else
+  warn "Voice server not responding on 8888."
 fi
 
 # --- Phase 6: Extended Core Context ---
@@ -610,9 +648,12 @@ test -d ~/portal && test -d ~/exchange && test -d ~/work && test -d ~/data && te
 # VM IP
 test -s ~/.vm-ip && check "VM IP configured ($(cat ~/.vm-ip))" "PASS" || check "VM IP configured" "FAIL"
 
-# Portal server
+# Servers
 curl -sf http://127.0.0.1:8080/ >/dev/null 2>&1 \
-  && check "Portal server responding" "PASS" || check "Portal server responding" "FAIL"
+  && check "Portal server responding (8080)" "PASS" || check "Portal server responding (8080)" "FAIL"
+
+curl -sf http://127.0.0.1:8888/health >/dev/null 2>&1 \
+  && check "Voice server responding (8888)" "PASS" || check "Voice server responding (8888)" "FAIL"
 
 # Context files
 test -f ~/.claude/PAI/USER/DESIGN.md \
@@ -660,14 +701,13 @@ echo -e "${BOLD}${GREEN}============================================${NC}"
 echo -e "${BOLD}${GREEN}  Installation Complete${NC}"
 echo -e "${BOLD}${GREEN}============================================${NC}"
 echo ""
-log "PAI:        ~/.claude/"
-log "Portal:     http://${VM_IP}:8080"
-log "Exchange:   http://${VM_IP}:8080/exchange/"
-log "Clipboard:  http://${VM_IP}:8080/clipboard/"
-log "Welcome:    http://${VM_IP}:8080/welcome/"
-log "Work:       ~/work/"
-log "Upstream:   ~/upstream/"
-log "Companion:  ~/pai-companion/"
+log "PAI:          ~/.claude/"
+log "Portal:       http://localhost:8080"
+log "Voice:        http://localhost:8888 (notification endpoint)"
+log "Work:         ~/work/"
+log "Upstream:     ~/upstream/"
+log "Companion:    ~/pai-companion/"
+log "Server logs:  ~/portal/server.log, ~/voice-server/server.log"
 echo ""
 warn "Next steps:"
 warn "  1. Run 'claude' to authenticate with your Anthropic API key"
