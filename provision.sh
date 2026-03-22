@@ -181,10 +181,27 @@ const server = Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     let path = url.pathname === "/" ? "/index.html" : url.pathname;
-    const file = Bun.file(`${import.meta.dir}${path}`);
+
+    // Try exact file first
+    let file = Bun.file(`${import.meta.dir}${path}`);
     if (await file.exists()) {
       return new Response(file);
     }
+
+    // Directory: try index.html inside it
+    if (path.endsWith("/")) {
+      file = Bun.file(`${import.meta.dir}${path}index.html`);
+      if (await file.exists()) {
+        return new Response(file);
+      }
+    }
+
+    // Path without trailing slash: try as directory with index.html
+    file = Bun.file(`${import.meta.dir}${path}/index.html`);
+    if (await file.exists()) {
+      return Response.redirect(`${url.origin}${path}/`, 301);
+    }
+
     return new Response("Not Found", { status: 404 });
   },
 });
