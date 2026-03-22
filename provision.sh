@@ -56,9 +56,19 @@ else
   source ~/.bashrc
 fi
 
-# Make sure bun is on PATH for the rest of this script
+# Make sure bun is on PATH for the rest of this script and future logins
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+
+if ! grep -q 'BUN_INSTALL' ~/.bashrc 2>/dev/null; then
+  cat >> ~/.bashrc <<'BUNPATH'
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+BUNPATH
+  log "Added Bun to PATH in .bashrc"
+fi
 
 # -----------------------------------------------------------
 # Step 3: Claude Code
