@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build PAI Status menu bar app
+# Build PAI-Status menu bar app
 # Usage: ./build.sh [--install]
 #
 # Compiles PAIStatus.swift into a standalone .app bundle.
@@ -8,8 +8,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="PAI Status"
-BUNDLE_NAME="PAIStatus.app"
+APP_NAME="PAI-Status"
+BUNDLE_NAME="PAI-Status.app"
 BUILD_DIR="$SCRIPT_DIR/build"
 
 echo "Building ${APP_NAME}..."
@@ -36,12 +36,15 @@ echo "Built: $BUILD_DIR/$BUNDLE_NAME"
 # Install if requested
 if [ "${1:-}" = "--install" ]; then
   echo "Installing to /Applications..."
-  # Close running instance if any
+  # Close running instance if any (try both old and new names)
+  osascript -e 'tell application "PAI-Status" to quit' 2>/dev/null || true
   osascript -e 'tell application "PAI Status" to quit' 2>/dev/null || true
+  pkill -f PAIStatus 2>/dev/null || true
   sleep 0.5
   rm -rf "/Applications/$BUNDLE_NAME"
+  rm -rf "/Applications/PAIStatus.app"  # Clean up old name
   cp -R "$BUILD_DIR/$BUNDLE_NAME" "/Applications/"
   echo "Installed to /Applications/$BUNDLE_NAME"
   echo ""
-  echo "Launch with: open -a 'PAI Status'"
+  echo "Launch with: open /Applications/PAI-Status.app"
 fi

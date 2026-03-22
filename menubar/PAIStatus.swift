@@ -37,7 +37,9 @@ class StatusDotView: NSView {
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
-    private var startStopMenuItem: NSMenuItem!
+    private var startMenuItem: NSMenuItem!
+    private var stopMenuItem: NSMenuItem!
+    private var restartMenuItem: NSMenuItem!
     private var sessionsSubmenu: NSMenu!
     private var newSessionMenuItem: NSMenuItem!
     private var timer: Timer?
@@ -93,18 +95,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Start / Stop
-        startStopMenuItem = NSMenuItem(title: "Start VM", action: #selector(toggleVM), keyEquivalent: "s")
-        startStopMenuItem.target = self
-        menu.addItem(startStopMenuItem)
+        // VM Control — separate Start, Stop, Restart
+        startMenuItem = NSMenuItem(title: "Start VM", action: #selector(startVM), keyEquivalent: "s")
+        startMenuItem.target = self
+        menu.addItem(startMenuItem)
+
+        stopMenuItem = NSMenuItem(title: "Stop VM", action: #selector(stopVM), keyEquivalent: "")
+        stopMenuItem.target = self
+        menu.addItem(stopMenuItem)
+
+        restartMenuItem = NSMenuItem(title: "Restart VM", action: #selector(restartVM), keyEquivalent: "r")
+        restartMenuItem.target = self
+        menu.addItem(restartMenuItem)
+
+        menu.addItem(NSMenuItem.separator())
 
         // Open Workspaces — primary action: opens cmux with all active sessions
         let openWorkspacesItem = NSMenuItem(title: "Open Workspaces", action: #selector(openWorkspaces), keyEquivalent: "o")
         openWorkspacesItem.target = self
         openWorkspacesItem.tag = openWorkspacesTag
         menu.addItem(openWorkspacesItem)
-
-        menu.addItem(NSMenuItem.separator())
 
         // New Claude Session
         newSessionMenuItem = NSMenuItem(title: "New Claude Session…", action: #selector(newSession), keyEquivalent: "n")
@@ -119,11 +129,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Open Portal
-        let portalItem = NSMenuItem(title: "Open Portal", action: #selector(openPortal), keyEquivalent: "p")
-        portalItem.target = self
-        portalItem.tag = portalMenuTag
-        menu.addItem(portalItem)
+        // Open PAI Web
+        let webItem = NSMenuItem(title: "Open PAI Web", action: #selector(openPortal), keyEquivalent: "w")
+        webItem.target = self
+        webItem.tag = portalMenuTag
+        menu.addItem(webItem)
 
         // Open in Terminal (plain shell)
         let terminalItem = NSMenuItem(title: "Open in Terminal", action: #selector(openTerminal), keyEquivalent: "t")
@@ -142,7 +152,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         // Quit
-        let quitItem = NSMenuItem(title: "Quit PAI Status", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit PAI-Status", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -212,9 +222,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let state = self.queryVMState()
 
             DispatchQueue.main.async {
-                // Don't override transient states (starting/stopping) with polled results
-                // unless the transient state has resolved
-                if self.vmState == .starting && state == .running {
+                // Don't override transient states with polled results
+                // During restart, ignore all polling until restart completes
+                if self.isRestarting {
+                    // Keep current state — restart manages its own transitions
+                } else if self.vmState == .starting && state == .running {
                     self.vmState = .running
                 } else if self.vmState == .stopping && state == .stopped {
                     self.vmState = .stopped
@@ -223,12 +235,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 self.statusMenuItem.title = "VM: \(self.vmState.rawValue)"
-                self.startStopMenuItem.title = self.vmState == .running ? "Stop VM" : "Start VM"
-                self.startStopMenuItem.isEnabled = (self.vmState != .starting && self.vmState != .stopping)
-                self.newSessionMenuItem.isEnabled = (self.vmState == .running)
-                // Enable/disable portal and terminal items based on VM state
+                let running = (self.vmState == .running)
+                let transitioning = (self.vmState == .starting || self.vmState == .stopping)
+                self.startMenuItem.isEnabled = !running && !transitioning
+                self.stopMenuItem.isEnabled = running && !transitioning
+                self.restartMenuItem.isEnabled = running && !transitioning
+                self.newSessionMenuItem.isEnabled = running
                 if let menu = self.statusItem.menu {
-                    let running = (self.vmState == .running)
                     menu.item(withTag: self.openWorkspacesTag)?.isEnabled = running
                     menu.item(withTag: self.portalMenuTag)?.isEnabled = running
                     menu.item(withTag: self.terminalMenuTag)?.isEnabled = running
@@ -260,18 +273,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - VM Control
 
-    @objc private func toggleVM() {
-        if vmState == .running {
-            stopVM()
-        } else {
-            startVM()
+    private var isRestarting = false
+
+    private func disableVMControls() {
+        startMenuItem.isEnabled = false
+        stopMenuItem.isEnabled = false
+        restartMenuItem.isEnabled = false
+    }
+
+    @objc private func restartVM() {
+        isRestarting = true
+        vmState = .stopping
+        statusMenuItem.title = "VM: Restarting…"
+        disableVMControls()
+        updateIcon()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "stop", self.vmName], timeout: 60)
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "start", self.vmName], timeout: 120)
+
+            DispatchQueue.main.async {
+                self.isRestarting = false
+                self.checkVMStatus()
+            }
         }
     }
 
-    private func startVM() {
+    @objc private func startVM() {
         vmState = .starting
         statusMenuItem.title = "VM: \(vmState.rawValue)"
-        startStopMenuItem.isEnabled = false
+        disableVMControls()
         updateIcon()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -284,10 +316,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func stopVM() {
+    @objc private func stopVM() {
         vmState = .stopping
         statusMenuItem.title = "VM: \(vmState.rawValue)"
-        startStopMenuItem.isEnabled = false
+        disableVMControls()
         updateIcon()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -577,9 +609,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if task.isRunning { task.terminate() }
         }
 
+        // Read pipe before waiting — prevents deadlock if output exceeds pipe buffer
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return (task.terminationStatus, output)
