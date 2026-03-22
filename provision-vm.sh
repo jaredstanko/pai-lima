@@ -187,6 +187,22 @@ fi
 
 source ~/.bashrc 2>/dev/null || true
 
+# -----------------------------------------------------------
+# Step 4b: Write .env now that ~/.claude exists
+# -----------------------------------------------------------
+if [ -d "$HOME/.claude" ]; then
+  if [ -f ~/.claude/.env ]; then
+    sed -i '/^VM_IP=/d; /^PORTAL_PORT=/d' ~/.claude/.env
+  fi
+  cat >> ~/.claude/.env <<ENVEOF
+VM_IP=$VM_IP
+PORTAL_PORT=8080
+ENVEOF
+  log "VM_IP and PORTAL_PORT written to ~/.claude/.env"
+else
+  warn "~/.claude does not exist — skipping .env write"
+fi
+
 # ===================================================================
 # Step 5: PAI Companion
 # Follows the companion's INSTALL.md phases, adapted for Lima (no Docker).
@@ -226,16 +242,8 @@ if [ -z "$VM_IP" ] || [ "$VM_IP" = "127.0.0.1" ]; then
 fi
 echo "$VM_IP" > ~/.vm-ip
 
-# Create or update .env with VM_IP
-mkdir -p ~/.claude
-if [ -f ~/.claude/.env ]; then
-  sed -i '/^VM_IP=/d; /^PORTAL_PORT=/d' ~/.claude/.env
-fi
-cat >> ~/.claude/.env <<ENVEOF
-VM_IP=$VM_IP
-PORTAL_PORT=8080
-ENVEOF
-log "VM IP: $VM_IP (saved to ~/.vm-ip and ~/.claude/.env)"
+# .env will be written after PAI install ensures ~/.claude exists (see Step 4b)
+log "VM IP: $VM_IP (saved to ~/.vm-ip)"
 
 # --- Phase 2: Directory Structure ---
 log "Phase 2: Setting up directories..."
