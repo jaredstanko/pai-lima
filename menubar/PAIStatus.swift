@@ -39,7 +39,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMenuItem: NSMenuItem!
     private var startMenuItem: NSMenuItem!
     private var stopMenuItem: NSMenuItem!
-    private var restartMenuItem: NSMenuItem!
     private var sessionsSubmenu: NSMenu!
     private var newSessionMenuItem: NSMenuItem!
     private var timer: Timer?
@@ -101,10 +100,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         stopMenuItem = NSMenuItem(title: "Stop VM", action: #selector(stopVM), keyEquivalent: "")
         stopMenuItem.target = self
         menu.addItem(stopMenuItem)
-
-        restartMenuItem = NSMenuItem(title: "Restart VM", action: #selector(restartVM), keyEquivalent: "r")
-        restartMenuItem.target = self
-        menu.addItem(restartMenuItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -215,10 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             DispatchQueue.main.async {
                 // Don't override transient states with polled results
-                // During restart, ignore all polling until restart completes
-                if self.isRestarting {
-                    // Keep current state — restart manages its own transitions
-                } else if self.vmState == .starting && state == .running {
+                if self.vmState == .starting && state == .running {
                     self.vmState = .running
                 } else if self.vmState == .stopping && state == .stopped {
                     self.vmState = .stopped
@@ -231,7 +223,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let transitioning = (self.vmState == .starting || self.vmState == .stopping)
                 self.startMenuItem.isEnabled = !running && !transitioning
                 self.stopMenuItem.isEnabled = running && !transitioning
-                self.restartMenuItem.isEnabled = running && !transitioning
                 self.newSessionMenuItem.isEnabled = running
                 if let menu = self.statusItem.menu {
                     menu.item(withTag: self.portalMenuTag)?.isEnabled = running
@@ -264,31 +255,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - VM Control
 
-    private var isRestarting = false
 
     private func disableVMControls() {
         startMenuItem.isEnabled = false
         stopMenuItem.isEnabled = false
-        restartMenuItem.isEnabled = false
-    }
-
-    @objc private func restartVM() {
-        isRestarting = true
-        vmState = .stopping
-        statusMenuItem.title = "VM: Restarting…"
-        disableVMControls()
-        updateIcon()
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "stop", self.vmName], timeout: 60)
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["limactl", "start", self.vmName], timeout: 120)
-
-            DispatchQueue.main.async {
-                self.isRestarting = false
-                self.checkVMStatus()
-            }
-        }
     }
 
     @objc private func startVM() {
