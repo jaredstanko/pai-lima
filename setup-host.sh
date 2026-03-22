@@ -40,7 +40,7 @@ fail() { echo -e "        ${RED}✗${NC} $1"; exit 1; }
 
 # Run limactl shell from /tmp to prevent Lima from trying to cd into
 # the host's cwd (which doesn't exist inside the VM).
-vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude -- "$@"); }
+vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude "$@"); }
 
 # ─── Banner ───────────────────────────────────────────────────
 
