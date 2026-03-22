@@ -54,7 +54,7 @@ portForwards:
 audio:
   device: vz
 
-# Provision the guest with audio drivers and essential packages
+# Provision: hardware/kernel setup only. All userland tools are in provision-vm.sh.
 provision:
   - mode: system
     script: |
@@ -74,7 +74,7 @@ provision:
       echo "virtio_snd" >> /etc/modules
 
       # Install ALSA and PulseAudio for audio playback
-      apt-get install -y -qq alsa-utils pulseaudio pulseaudio-utils
+      apt-get install -y -qq alsa-utils pulseaudio pulseaudio-utils kitty-terminfo
 
       # Enable PulseAudio system-wide service (headless VM, no user session)
       mkdir -p /etc/pulse/system.pa.d
@@ -105,6 +105,3 @@ provision:
       # Enable and start PulseAudio
       systemctl daemon-reload
       systemctl enable pulseaudio.service
-
-      # Install optional but recommended CLI tools
-      apt-get install -y -qq jq tree tmux wget whois dnsutils imagemagick ffmpeg python3-venv kitty-terminfo
