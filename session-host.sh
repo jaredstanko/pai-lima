@@ -2,9 +2,9 @@
 # PAI Lima — spawn a new PAI session in kitty
 #
 # Usage:
-#   ./session.sh              # New PAI session (Claude Code)
-#   ./session.sh --shell      # Open a plain shell in the VM
-#   ./session.sh --resume     # Resume a previous session (interactive picker)
+#   ./session-host.sh              # New PAI session (Claude Code)
+#   ./session-host.sh --shell      # Open a plain shell in the VM
+#   ./session-host.sh --resume     # Resume a previous session (interactive picker)
 
 set -euo pipefail
 

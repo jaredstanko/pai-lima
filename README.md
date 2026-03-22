@@ -125,18 +125,18 @@ The menu bar app is the primary interface, but shell scripts are available if yo
 
 ```bash
 # Launch a new PAI session
-./launch.sh
+./launch-host.sh
 
 # Resume a previous session (interactive picker)
-./launch.sh --resume
+./launch-host.sh --resume
 
 # Open a plain shell in the VM
-./launch.sh --shell
+./launch-host.sh --shell
 
 # Or use session.sh for the same options
-./session.sh
-./session.sh --resume
-./session.sh --shell
+./session-host.sh
+./session-host.sh --resume
+./session-host.sh --shell
 ```
 
 ## How Sessions Work
@@ -190,7 +190,7 @@ If you already have a "pai" VM and want to update without losing data:
 ```bash
 cd pai-lima
 git pull
-./upgrade.sh
+./upgrade-host.sh
 ```
 
 This safely upgrades:
@@ -284,11 +284,11 @@ limactl start pai
 ```
 pai-lima/
 ├─ setup-host.sh       Guided installer (run this first time)
-├─ upgrade.sh          Safe upgrade for existing installs
-├─ provision.sh        VM-side provisioning (called by installer)
+├─ upgrade-host.sh          Safe upgrade for existing installs
+├─ provision-vm.sh        VM-side provisioning (called by installer)
 ├─ pai.yaml            Lima VM configuration
-├─ launch.sh           CLI: launch PAI session (menu bar alternative)
-├─ session.sh          CLI: launch/resume sessions
+├─ launch-host.sh           CLI: launch PAI session (menu bar alternative)
+├─ session-host.sh          CLI: launch/resume sessions
 ├─ config/
 │  ├─ kitty.conf       kitty terminal configuration
 │  └─ portal.webloc    Portal bookmark template

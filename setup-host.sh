@@ -152,8 +152,8 @@ echo "        This step takes 3-5 minutes on first run."
 if limactl shell pai -- command -v claude &>/dev/null 2>&1; then
   skip "Claude Code already installed in VM"
 else
-  limactl cp "$SCRIPT_DIR/provision.sh" pai:/home/claude/provision.sh
-  limactl shell pai -- bash /home/claude/provision.sh
+  limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
+  limactl shell pai -- bash /home/claude/provision-vm.sh
   ok "Sandbox provisioned"
 fi
 
@@ -202,7 +202,7 @@ step "Claude Code authentication..."
 
 echo ""
 echo "        To authenticate Claude Code, launch a workspace and follow the prompts:"
-echo "        ./launch.sh"
+echo "        ./launch-host.sh"
 echo ""
 echo "        Or authenticate directly:"
 echo "        limactl shell pai -- claude"
@@ -218,7 +218,7 @@ echo ""
 echo -e "  ${GREEN}●${NC} PAI-Status is in your menu bar (top right)"
 echo -e "  📂 Shared files: ~/pai-workspace/"
 echo -e "  🌐 Portal: http://localhost:8080 (bookmark on Desktop)"
-echo -e "  🖥️  To open workspaces: ${BOLD}./launch.sh${NC}"
+echo -e "  🖥️  To open workspaces: ${BOLD}./launch-host.sh${NC}"
 echo ""
 echo "  Quick start:"
 echo "    • Drop files in ~/pai-workspace/exchange/ to give them to the AI"

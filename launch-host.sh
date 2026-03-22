@@ -3,9 +3,9 @@
 # Opens a kitty window connected to the VM running PAI (Claude Code).
 #
 # Usage:
-#   ./launch.sh              # Open PAI session
-#   ./launch.sh --resume     # Resume a previous Claude Code session
-#   ./launch.sh --shell      # Open a plain shell in the VM
+#   ./launch-host.sh              # Open PAI session
+#   ./launch-host.sh --resume     # Resume a previous Claude Code session
+#   ./launch-host.sh --shell      # Open a plain shell in the VM
 #
 # Prerequisites:
 #   - kitty installed (brew install --cask kitty)

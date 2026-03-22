@@ -4,7 +4,7 @@
 # Called automatically by setup-host.sh on the Mac.
 #
 # Usage:
-#   bash ~/provision.sh
+#   bash ~/provision-vm.sh
 #
 # This script installs:
 #   1. Bun (JavaScript runtime)
