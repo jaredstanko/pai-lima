@@ -34,15 +34,15 @@ fi
 case "${1:-}" in
   --resume|-r)
     echo "Opening session picker..."
-    kitty --title "Resume Session" limactl shell pai --workdir /home/claude -- bash -lc "claude -r"
+    kitty --title "Resume Session" limactl shell pai bash -lc "claude -r"
     ;;
   --shell|-s)
     echo "Opening shell..."
-    kitty --title "PAI Shell" limactl shell pai --workdir /home/claude
+    kitty --title "PAI Shell" limactl shell pai
     ;;
   *)
     echo "Launching PAI..."
-    kitty --title "PAI" limactl shell pai --workdir /home/claude -- bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
+    kitty --title "PAI" limactl shell pai bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
 

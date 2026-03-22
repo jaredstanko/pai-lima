@@ -38,10 +38,6 @@ ok()   { echo -e "        ${GREEN}✓${NC} $1"; }
 skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already done)"; }
 fail() { echo -e "        ${RED}✗${NC} $1"; exit 1; }
 
-# Run limactl shell from /tmp to prevent Lima from trying to cd into
-# the host's cwd (which doesn't exist inside the VM).
-vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude "$@"); }
-
 # ─── Banner ───────────────────────────────────────────────────
 
 echo ""
@@ -173,7 +169,7 @@ sleep 3
 echo "        Playing test sound inside VM..."
 # Generate a 1-second 440Hz sine wave and play it through ALSA/PulseAudio
 # Run from /tmp to avoid Lima trying to cd into the host's cwd inside the VM
-vm_run bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
+limactl shell pai bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
 
 echo ""
 echo -e "        ${YELLOW}▸ Did you hear a tone from your Mac speakers? [y/N]${NC}"
@@ -183,7 +179,7 @@ if [[ "$HEARD_SOUND" =~ ^[Yy] ]]; then
   ok "Audio passthrough confirmed"
 else
   echo -e "        ${YELLOW}⊘${NC} Audio not heard — this is non-blocking, continuing setup."
-  echo "        You can troubleshoot later: limactl shell pai --workdir /home/claude -- speaker-test -t sine -f 440 -l 1"
+  echo "        You can troubleshoot later: limactl shell pai speaker-test -t sine -f 440 -l 1"
 fi
 
 # ─── Step 6: Provision sandbox ────────────────────────────────
@@ -192,11 +188,11 @@ step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
 # Check if already provisioned (claude command exists in VM)
-if vm_run command -v claude &>/dev/null 2>&1; then
+if limactl shell pai command -v claude &>/dev/null 2>&1; then
   skip "Claude Code already installed in VM"
 else
   limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
-  vm_run bash /home/claude/provision-vm.sh
+  limactl shell pai bash /home/claude/provision-vm.sh
   ok "Sandbox provisioned"
 fi
 
@@ -248,7 +244,7 @@ echo "        To authenticate Claude Code, launch a workspace and follow the pro
 echo "        ./launch-host.sh"
 echo ""
 echo "        Or authenticate directly:"
-echo "        limactl shell pai --workdir /home/claude -- claude  # (display only, not executed)"
+echo "        limactl shell pai claude"
 ok "Claude Code ready — authenticate on first workspace launch"
 
 # ─── Done ─────────────────────────────────────────────────────
