@@ -44,7 +44,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var newSessionMenuItem: NSMenuItem!
     private var timer: Timer?
     private var vmState: VMState = .unknown
-    private var lastSessionsOutput: String = ""
 
     // Constants
     private let vmName = "pai"
@@ -52,7 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let portalMenuTag = 100
     private let terminalMenuTag = 101
 
-    // Paths — limactl and cmux are in /opt/homebrew/bin on Apple Silicon
+    // Paths — limactl and kitty are in /opt/homebrew/bin on Apple Silicon
     private let env: [String: String] = {
         var e = ProcessInfo.processInfo.environment
         let home = NSHomeDirectory()
@@ -333,81 +332,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTerminal() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            self.ensureCmuxRunning()
-            self.openCmuxWorkspace(command: "limactl shell \(self.vmName)", name: "shell")
-        }
+        openKittyWindow(title: "PAI Shell", args: ["limactl", "shell", vmName])
     }
 
     // MARK: - Session Management
 
     @objc private func newSession() {
-        let alert = NSAlert()
-        alert.messageText = "New PAI Session"
-        alert.informativeText = "Enter a name for the tmux session:"
-        alert.addButton(withTitle: "Create")
-        alert.addButton(withTitle: "Cancel")
+        // Open kitty window that shells into VM and runs PAI
+        openKittyWindow(title: "PAI", args: [
+            "limactl", "shell", vmName, "--",
+            "bash", "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
+        ])
+    }
 
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        let timestamp = Int(Date().timeIntervalSince1970) % 10000
-        input.stringValue = "claude-\(timestamp)"
-        alert.accessoryView = input
-        alert.window.initialFirstResponder = input
+    @objc private func resumeSession() {
+        // Open kitty window with claude -r (interactive session picker)
+        openKittyWindow(title: "Resume Session", args: [
+            "limactl", "shell", vmName, "--",
+            "bash", "-lc", "claude -r"
+        ])
+    }
 
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return }
+    // MARK: - kitty Helpers
 
-        let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-
+    private func openKittyWindow(title: String, args: [String]) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            self.ensureCmuxRunning()
-            // Shell into VM, start tmux session, and launch PAI
-            let paiCmd = "limactl shell \(self.vmName) -- tmux new-session -As \(name) \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
-            self.openCmuxWorkspace(command: paiCmd, name: name)
+            var kittyArgs = ["--title", title]
+            kittyArgs.append(contentsOf: args)
+            let (_, _) = self.runProcess("/usr/bin/env", args: ["kitty"] + kittyArgs, timeout: 5)
         }
-    }
-
-    @objc private func attachToSession(_ sender: NSMenuItem) {
-        guard let name = sender.representedObject as? String else { return }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            self.ensureCmuxRunning()
-            self.openCmuxWorkspace(command: "limactl shell \(self.vmName) -- tmux new-session -As \(name)", name: name)
-        }
-    }
-
-    // MARK: - cmux Helpers
-
-    private func isCmuxRunning() -> Bool {
-        let (exitCode, _) = runProcess("/usr/bin/pgrep", args: ["-x", "cmux"], timeout: 5)
-        return exitCode == 0
-    }
-
-    private func ensureCmuxRunning() {
-        let openTask = Process()
-        openTask.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        openTask.arguments = ["-a", "cmux"]
-        try? openTask.run()
-        openTask.waitUntilExit()
-        Thread.sleep(forTimeInterval: 1.0)
-    }
-
-    private func openCmuxWorkspace(command: String, name: String) {
-        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "new-workspace", "--command", command], timeout: 10)
-        Thread.sleep(forTimeInterval: 0.3)
-        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "rename-workspace", name], timeout: 5)
-    }
-
-    /// Replace cmux's default workspace (created on fresh launch) with our command
-    private func replaceDefaultWorkspace(command: String, name: String) {
-        // Send the command to the default workspace's terminal, then rename it
-        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "send", "--workspace", "workspace:1", command + "\n"], timeout: 10)
-        Thread.sleep(forTimeInterval: 0.3)
-        let (_, _) = runProcess("/usr/bin/env", args: ["cmux", "rename-workspace", "--workspace", "workspace:1", name], timeout: 5)
     }
 
     private func refreshSessions() {
@@ -416,43 +370,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let item = NSMenuItem(title: "(VM not running)", action: nil, keyEquivalent: "")
             item.isEnabled = false
             sessionsSubmenu.addItem(item)
-            lastSessionsOutput = ""
             return
         }
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self = self else { return }
-            let (exitCode, output) = self.runProcess(
-                "/usr/bin/env",
-                args: ["limactl", "shell", self.vmName, "--", "tmux", "list-sessions", "-F", "#{session_name}: #{session_windows} windows (#{session_attached} attached)"],
-                timeout: 5
-            )
-
-            let currentOutput = (exitCode == 0 ? output : nil) ?? ""
-
-            DispatchQueue.main.async {
-                // Skip rebuild if output unchanged
-                guard currentOutput != self.lastSessionsOutput else { return }
-                self.lastSessionsOutput = currentOutput
-
-                self.sessionsSubmenu.removeAllItems()
-
-                guard !currentOutput.isEmpty else {
-                    let item = NSMenuItem(title: "(no active sessions)", action: nil, keyEquivalent: "")
-                    item.isEnabled = false
-                    self.sessionsSubmenu.addItem(item)
-                    return
-                }
-
-                for line in currentOutput.components(separatedBy: "\n") where !line.isEmpty {
-                    let sessionName = line.components(separatedBy: ":").first ?? line
-                    let item = NSMenuItem(title: line, action: #selector(self.attachToSession(_:)), keyEquivalent: "")
-                    item.target = self
-                    item.representedObject = sessionName
-                    self.sessionsSubmenu.addItem(item)
-                }
-            }
-        }
+        sessionsSubmenu.removeAllItems()
+        let resumeItem = NSMenuItem(title: "Resume Session…", action: #selector(resumeSession), keyEquivalent: "")
+        resumeItem.target = self
+        sessionsSubmenu.addItem(resumeItem)
     }
 
     // MARK: - Launch at Login
