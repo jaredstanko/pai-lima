@@ -360,7 +360,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self else { return }
             var kittyArgs = ["--title", title]
             kittyArgs.append(contentsOf: args)
-            let (_, _) = self.runProcess("/usr/bin/env", args: ["kitty"] + kittyArgs, timeout: 5)
+
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            task.arguments = ["kitty"] + kittyArgs
+            task.environment = self.env
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = FileHandle.nullDevice
+            try? task.run()
+            // Don't wait — kitty is a long-running GUI process
         }
     }
 
