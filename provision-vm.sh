@@ -188,9 +188,12 @@ fi
 source ~/.bashrc 2>/dev/null || true
 
 # -----------------------------------------------------------
-# Step 4b: Write .env now that ~/.claude exists
+# Step 4b: Write .env to ~/.claude (Lima mount from host ~/pai-workspace/claude-home)
 # -----------------------------------------------------------
-if [ -d "$HOME/.claude" ]; then
+# ~/.claude is a Lima mount point — it exists from boot but may be empty.
+# Ensure the mount is writable before writing.
+if [ -d "$HOME/.claude" ] && touch "$HOME/.claude/.env-test" 2>/dev/null; then
+  rm -f "$HOME/.claude/.env-test"
   if [ -f ~/.claude/.env ]; then
     sed -i '/^VM_IP=/d; /^PORTAL_PORT=/d' ~/.claude/.env
   fi
@@ -200,7 +203,8 @@ PORTAL_PORT=8080
 ENVEOF
   log "VM_IP and PORTAL_PORT written to ~/.claude/.env"
 else
-  warn "~/.claude does not exist — skipping .env write"
+  warn "~/.claude mount not writable — skipping .env write"
+  warn "Ensure ~/pai-workspace/claude-home exists on the host"
 fi
 
 # ===================================================================
