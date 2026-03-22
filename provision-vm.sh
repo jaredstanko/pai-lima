@@ -43,7 +43,7 @@ sudo apt-get install -y -qq \
   nmap whois dnsutils net-tools traceroute mtr \
   texlive-latex-base texlive-fonts-recommended pandoc \
   golang-go python3 python3-pip python3-venv build-essential git \
-  zip tree nodejs npm
+  zip tree nodejs npm kitty-terminfo
 
 # -----------------------------------------------------------
 # Step 2: Bun
