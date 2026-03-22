@@ -111,21 +111,6 @@ else
   log "PAI installed."
 fi
 
-# Install xterm-ghostty terminfo (cmux sets TERM=xterm-ghostty)
-if ! infocmp xterm-ghostty &>/dev/null; then
-  log "Installing xterm-ghostty terminfo for cmux compatibility..."
-  if [ -f /tmp/ghostty.terminfo ]; then
-    tic -x /tmp/ghostty.terminfo 2>/dev/null || true
-  else
-    # Minimal fallback: alias to xterm-256color
-    cat > /tmp/ghostty-fallback.ti <<'TI'
-xterm-ghostty|ghostty|Ghostty - cmux terminal,
-	use=xterm-256color,
-TI
-    tic -x /tmp/ghostty-fallback.ti 2>/dev/null || true
-  fi
-fi
-
 # Ensure pai alias exists in .bashrc
 if ! grep -q "alias pai=" ~/.bashrc 2>/dev/null; then
   echo "" >> ~/.bashrc

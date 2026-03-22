@@ -7,8 +7,8 @@ A sandboxed AI workspace running PAI + Claude Code on a Lima VM (Ubuntu 24.04 AR
 - **Sandboxed VM** — Claude Code runs in an isolated Ubuntu VM, not on your Mac
 - **PAI v4.0** — [Personal AI Infrastructure](https://github.com/danielmiessler/Personal_AI_Infrastructure) with skills, tools, and memory
 - **PAI Companion** — [Web portal](https://github.com/chriscantey/pai-companion) at `http://localhost:8080` for dashboards and file exchange
-- **Menu bar app** — PAI-Status shows VM status, starts/stops the VM, and opens workspaces from a tray icon
-- **Persistent workspaces** — tmux sessions in the VM survive app restarts, SSH disconnects, and sleep/wake
+- **Menu bar app** — PAI-Status shows VM status, starts/stops the VM, and launches sessions
+- **Session resume** — Claude Code sessions can be resumed with `claude -r` after closing
 - **Shared folders** — `~/pai-workspace/` on your Mac is shared with the VM for file exchange
 - **Audio passthrough** — VirtIO sound device routes VM audio to your Mac speakers
 
@@ -18,7 +18,7 @@ A sandboxed AI workspace running PAI + Claude Code on a Lima VM (Ubuntu 24.04 AR
 - Apple Silicon (M1/M2/M3/M4)
 - An Anthropic API key for Claude Code
 
-That's it. The installer handles everything else (Homebrew, Lima, cmux, etc.).
+That's it. The installer handles everything else (Homebrew, Lima, kitty, etc.).
 
 ## Install
 
@@ -31,11 +31,11 @@ cd pai-lima
 The installer walks you through 9 steps:
 
 1. Checks system requirements (macOS, Apple Silicon, Homebrew, Xcode CLI tools)
-2. Installs Lima and cmux
+2. Installs Lima and kitty
 3. Creates `~/pai-workspace/` shared directories
 4. Creates and starts the Lima VM
 5. Provisions the VM (Claude Code, PAI, tools — takes 3-5 minutes on first run)
-6. Verifies terminal keybinding compatibility
+6. Configures kitty terminal settings
 7. Builds and installs the PAI-Status menu bar app
 8. Creates a portal bookmark on your Desktop
 9. Provides authentication instructions
@@ -46,13 +46,13 @@ After setup completes, you'll see PAI-Status in your menu bar.
 
 Everything is controlled from the **PAI-Status menu bar icon** — no terminal commands needed.
 
-### Start your workspaces
+### Start a session
 
 1. Click the PAI icon in your menu bar
 2. Click **Start VM** — wait for the green dot
-3. Click **Open Workspaces** — cmux opens with all your active sessions
+3. Click **New PAI Session…** — a kitty window opens with PAI running in the VM
 
-If no sessions exist yet, a default "pai" workspace is created with PAI auto-started.
+To resume a previous session, go to **Active Sessions → Resume Session…** which opens Claude Code's interactive session picker.
 
 ### Menu bar controls
 
@@ -63,13 +63,12 @@ If no sessions exist yet, a default "pai" workspace is created with PAI auto-sta
 ├─ Stop VM                     ← gracefully stop the VM
 ├─ Restart VM                  ← stop then start the VM
 ├─ ─────────────────────────
-├─ New PAI Session…            ← create a named workspace with PAI
-├─ Active Sessions             ← submenu: click to reattach
-│   ├─ research (2 windows)
-│   └─ debug (1 window)
+├─ New PAI Session…            ← open kitty with PAI in the VM
+├─ Active Sessions             ← submenu
+│   └─ Resume Session…         ← pick a previous session to resume
 ├─ ─────────────────────────
 ├─ Open PAI Web                ← opens http://localhost:8080
-├─ Open a Terminal             ← plain shell in cmux, no tmux
+├─ Open a Terminal             ← plain shell in kitty
 ├─ ─────────────────────────
 ├─ Launch at Login ☐           ← toggle: start PAI-Status on login
 └─ Quit PAI-Status
@@ -83,12 +82,12 @@ If no sessions exist yet, a default "pai" workspace is created with PAI auto-sta
 | **Start VM** | Starts the Lima VM (`limactl start pai`). Disabled when the VM is already running or transitioning. |
 | **Stop VM** | Gracefully stops the VM (`limactl stop pai`). Disabled when the VM is already stopped or transitioning. |
 | **Restart VM** | Stops then starts the VM in sequence. Useful after configuration changes. Disabled when the VM is stopped. |
-| **New PAI Session…** | Prompts for a session name, then creates a new tmux session inside the VM with PAI (Claude Code) auto-started. Opens in a new cmux tab. |
-| **Active Sessions** | Submenu listing all tmux sessions running inside the VM. Click any session to reattach to it in a cmux tab. Shows window count and attached status. |
+| **New PAI Session…** | Opens a kitty window that connects to the VM and launches PAI (Claude Code). Each session runs in its own kitty window. |
+| **Active Sessions → Resume Session…** | Opens a kitty window with Claude Code's interactive session picker (`claude -r`). Select a previous session to resume where you left off. |
 | **Open PAI Web** | Opens the PAI Companion web portal at `http://localhost:8080` in your default browser. The portal provides dashboards, reports, and a file exchange UI. |
-| **Open a Terminal** | Opens a plain shell session in cmux connected to the VM — no tmux, no PAI. Useful for manual VM administration. |
+| **Open a Terminal** | Opens a kitty window with a plain shell connected to the VM — no PAI, no Claude Code. Useful for manual VM administration. |
 | **Launch at Login** | Toggle to auto-start PAI-Status when you log in to your Mac. Installs a LaunchAgent. The VM does not auto-start — you still click "Start VM" when ready. |
-| **Quit PAI-Status** | Exits the menu bar app. Does not stop the VM or close cmux — your sessions continue running. |
+| **Quit PAI-Status** | Exits the menu bar app. Does not stop the VM — your VM continues running. |
 
 ### Launch at Login
 
@@ -118,63 +117,55 @@ The PAI Companion portal runs inside the VM on port 8080, forwarded to your Mac 
 http://localhost:8080
 ```
 
-A bookmark is placed on your Desktop during setup. You can also click **Open Portal** in the menu bar.
+A bookmark is placed on your Desktop during setup. You can also click **Open PAI Web** in the menu bar.
 
 ## CLI Fallback
 
 The menu bar app is the primary interface, but shell scripts are available if you prefer the terminal:
 
 ```bash
-# Open all active workspaces (same as menu bar "Open Workspaces")
+# Launch a new PAI session
 ./launch.sh
 
-# Open specific named workspaces
-./launch.sh research debug
+# Resume a previous session (interactive picker)
+./launch.sh --resume
 
-# Create a new session with PAI auto-started
-./session.sh research
+# Open a plain shell in the VM
+./launch.sh --shell
 
-# Create a session with just a shell (no PAI)
-./session.sh debug --shell
-
-# List active sessions
-./session.sh --list
+# Or use session.sh for the same options
+./session.sh
+./session.sh --resume
+./session.sh --shell
 ```
 
-## How Workspaces Work
+## How Sessions Work
 
-Every workspace is a cmux tab connected to a persistent **tmux session** inside the VM.
+Each session opens a kitty window connected directly to the VM running Claude Code.
 
 ```
-cmux (macOS)          Lima VM (Ubuntu)
-┌──────────────┐      ┌──────────────────┐
-│ Workspace:   │ SSH  │ tmux session:    │
-│  "research"  │─────▶│  "research"      │
-│              │      │   └─ pai          │
-├──────────────┤      ├──────────────────┤
-│ Workspace:   │ SSH  │ tmux session:    │
-│  "debug"     │─────▶│  "debug"         │
-│              │      │   └─ shell        │
-└──────────────┘      └──────────────────┘
+PAI-Status (macOS)        kitty window          Lima VM (Ubuntu)
+┌──────────────────┐      ┌──────────────┐      ┌──────────────────┐
+│ New PAI Session   │─────▶│ kitty        │─────▶│ Claude Code      │
+│                   │      │              │      │ (PAI)            │
+└──────────────────┘      └──────────────┘      └──────────────────┘
 ```
 
-- Closing a cmux tab detaches from tmux — the session keeps running
-- Reopening (via menu bar or `launch.sh`) reattaches to all active sessions
-- Sessions survive Mac sleep, cmux quit, and SSH disconnects
+- Closing the kitty window ends the Claude Code process
+- Sessions can be resumed later with **Resume Session…** or `claude -r`
+- Claude Code's `--resume` restores your full conversation context
 
 ## Keyboard Shortcuts
 
-These must work through cmux into the VM. They work by default — if something breaks, see `config/terminal.conf`.
+These work in kitty by default. Configuration is at `~/.config/kitty/kitty.conf` (installed by setup).
 
 | Key | Function |
 |-----|----------|
 | Shift+Enter | Newline in Claude Code input (multi-line prompts) |
-| Ctrl+B | tmux prefix key |
-| Ctrl+B, d | Detach from tmux session |
-| Ctrl+B, c | New tmux window |
-| Ctrl+B, n/p | Next/previous tmux window |
 | Ctrl+C | Interrupt command |
 | Escape | Cancel Claude Code input |
+| Ctrl+Shift+T | New kitty tab |
+| Ctrl+Shift+N | New kitty window |
 
 ## Audio
 
@@ -203,13 +194,13 @@ git pull
 ```
 
 This safely upgrades:
-- Host tools (Lima, cmux)
+- Host tools (Lima, kitty)
 - PAI-Status menu bar app (rebuilt with latest features)
 - VM networking (adds vzNAT + localhost:8080 port forwarding if missing)
 - VM system packages and shell aliases
 - Portal bookmark
 
-**What's preserved** — your workspace files, Claude Code authentication, PAI config, tmux sessions, and everything in `~/pai-workspace/`.
+**What's preserved** — your workspace files, Claude Code authentication, PAI config, and everything in `~/pai-workspace/`.
 
 The VM will be briefly stopped and restarted if networking changes are needed.
 
@@ -286,7 +277,7 @@ limactl start pai
 - **PAI v4.0** — Personal AI Infrastructure
 - **Bun** — JavaScript runtime (portal server)
 - **Playwright** — browser automation with Chromium
-- **System tools** — git, curl, jq, tmux, ripgrep, fzf, bat, imagemagick, ffmpeg, python3, golang, nmap, whois, dnsutils, pandoc, yt-dlp, sqlite3, and more
+- **System tools** — git, curl, jq, ripgrep, fzf, bat, imagemagick, ffmpeg, python3, golang, nmap, whois, dnsutils, pandoc, yt-dlp, sqlite3, and more
 
 ## Project Structure
 
@@ -296,16 +287,15 @@ pai-lima/
 ├─ upgrade.sh          Safe upgrade for existing installs
 ├─ provision.sh        VM-side provisioning (called by installer)
 ├─ pai.yaml            Lima VM configuration
-├─ launch.sh           CLI: open workspaces (menu bar alternative)
-├─ session.sh          CLI: manage individual sessions
+├─ launch.sh           CLI: launch PAI session (menu bar alternative)
+├─ session.sh          CLI: launch/resume sessions
 ├─ config/
-│  ├─ terminal.conf    Keybinding documentation
+│  ├─ kitty.conf       kitty terminal configuration
 │  └─ portal.webloc    Portal bookmark template
 ├─ menubar/
 │  ├─ PAIStatus.swift  Menu bar app source
 │  ├─ build.sh         Compile and install script
 │  └─ Info.plist       App bundle metadata
-├─ install.sh          Legacy VM provisioner (use provision.sh)
 └─ README.md           This file
 ```
 
@@ -313,7 +303,7 @@ pai-lima/
 
 **Setup fails at "Creating sandbox VM"** — Make sure no existing VM named "pai" is in a bad state. Run `limactl delete pai --force` and re-run `./setup-host.sh`.
 
-**PAI-Status not in menu bar** — Run `open -a "PAI-Status"` or rebuild: `cd menubar && ./build.sh --install`.
+**PAI-Status not in menu bar** — Run `open /Applications/PAI-Status.app` or rebuild: `cd menubar && ./build.sh --install`.
 
 **Portal not loading at localhost:8080** — Check the service inside the VM: `limactl shell pai -- systemctl --user status pai-portal`. The VM must be running and vzNAT networking must be enabled (it is by default in pai.yaml).
 
@@ -321,7 +311,7 @@ pai-lima/
 
 **Shared folders not visible** — Ensure `~/pai-workspace/` exists on your Mac. The installer creates it, but if missing: `mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}`.
 
-**Shift+Enter doesn't work in Claude Code** — Check cmux Preferences → Keyboard. See `config/terminal.conf` for details.
+**Shift+Enter doesn't work in Claude Code** — Check kitty config at `~/.config/kitty/kitty.conf`. The `map shift+enter send_text all \x1b[13;2u` line should be present.
 
 **aplay works with sudo but not as claude** — Log out of the VM and back in (`exit` then `limactl shell pai`) to refresh group membership.
 
@@ -330,4 +320,4 @@ pai-lima/
 - [Lima](https://lima-vm.io/) — Linux VMs on macOS
 - [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure) — Personal AI Infrastructure by Daniel Miessler
 - [PAI Companion](https://github.com/chriscantey/pai-companion) — Companion package by Chris Cantey
-- [cmux](https://www.cmux.dev/) — Terminal app for AI agent workflows
+- [kitty](https://sw.kovidgoyal.net/kitty/) — GPU-accelerated terminal emulator

@@ -3,7 +3,7 @@
 # Safe to run on an existing "pai" VM without losing data.
 #
 # What this upgrades:
-#   - Host tools (Lima, cmux via brew)
+#   - Host tools (Lima, kitty via brew)
 #   - PAI-Status menu bar app (rebuilt from source)
 #   - Portal bookmark on Desktop
 #   - VM networking (adds vzNAT + port forwarding if missing)
@@ -13,7 +13,7 @@
 #   - Your data in ~/pai-workspace/
 #   - Your Claude Code authentication
 #   - Your PAI configuration (~/.claude/ inside the VM)
-#   - Your tmux sessions
+#   - Your Claude Code sessions
 #   - Your work/ directory
 #
 # Usage:
@@ -55,7 +55,7 @@ step "Upgrading host tools..."
 
 if command -v brew &>/dev/null; then
   brew upgrade lima 2>/dev/null && ok "Lima upgraded" || skip "Lima"
-  brew upgrade --cask cmux 2>/dev/null && ok "cmux upgraded" || skip "cmux"
+  brew upgrade --cask kitty 2>/dev/null && ok "kitty upgraded" || skip "kitty"
 else
   skip "Homebrew not found — skipping tool upgrades"
 fi
@@ -184,10 +184,10 @@ echo "  What was preserved:"
 echo "    • All files in ~/pai-workspace/"
 echo "    • Claude Code authentication"
 echo "    • PAI configuration (~/.claude/)"
-echo "    • Active tmux sessions"
+echo "    • Claude Code sessions"
 echo ""
 echo "  What was updated:"
-echo "    • Host tools (Lima, cmux)"
+echo "    • Host tools (Lima, kitty)"
 echo "    • PAI-Status menu bar app"
 echo "    • VM networking (vzNAT → localhost:8080)"
 echo "    • VM system packages and aliases"

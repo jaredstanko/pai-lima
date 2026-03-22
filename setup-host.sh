@@ -96,12 +96,17 @@ else
   ok "Lima installed"
 fi
 
-if [ -d "/Applications/cmux.app" ] || command -v cmux &>/dev/null; then
-  skip "cmux"
+if [ -d "/Applications/kitty.app" ] || command -v kitty &>/dev/null; then
+  skip "kitty ($(kitty --version 2>/dev/null || echo 'installed'))"
 else
-  brew install --cask cmux
-  ok "cmux installed"
+  brew install --cask kitty
+  ok "kitty installed"
 fi
+
+# Install kitty configuration
+mkdir -p "$HOME/.config/kitty"
+cp "$SCRIPT_DIR/config/kitty.conf" "$HOME/.config/kitty/kitty.conf"
+ok "kitty.conf installed to ~/.config/kitty/"
 
 # ─── Step 3: Create shared workspace directories ──────────────
 
@@ -154,16 +159,13 @@ fi
 
 # ─── Step 6: Configure terminal keybindings ───────────────────
 
-step "Configuring terminal keybindings..."
+step "Verifying terminal configuration..."
 
-echo "        cmux keybinding requirements:"
-echo "          • Shift+Enter must send escape sequence (not be captured)"
-echo "          • Ctrl+B must pass through to tmux (not captured by cmux)"
-echo ""
-echo "        These work by default in cmux. If you experience issues:"
-echo "          • Open cmux → Preferences → Keyboard"
-echo "          • See config/terminal.conf for full documentation"
-ok "Keybinding documentation at config/terminal.conf"
+echo "        kitty keybinding configuration:"
+echo "          • Shift+Enter sends escape sequence for Claude Code multi-line input"
+echo "          • Remote control enabled for PAI-Status integration"
+echo "          • Config installed at ~/.config/kitty/kitty.conf"
+ok "kitty configured (see config/kitty.conf)"
 
 # ─── Step 7: Build and install menu bar app ───────────────────
 
