@@ -49,8 +49,6 @@ networks:
 portForwards:
   - guestPort: 8080
     hostIP: "127.0.0.1"
-  - guestPort: 8888
-    hostIP: "127.0.0.1"
 
 # Audio: VZ virtio sound device → macOS host speakers
 audio:
