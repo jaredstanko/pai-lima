@@ -160,7 +160,7 @@ sleep 3
 
 echo "        Playing test sound inside VM..."
 # Generate a 1-second 440Hz sine wave and play it through ALSA/PulseAudio
-limactl shell pai -- bash -c '
+limactl shell pai --workdir /home/claude -- bash -c '
   export PULSE_SERVER=unix:/run/pulse/native
   # Generate a short beep using speaker-test (part of alsa-utils)
   timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true
@@ -183,11 +183,11 @@ step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
 # Check if already provisioned (claude command exists in VM)
-if limactl shell pai -- command -v claude &>/dev/null 2>&1; then
+if limactl shell pai --workdir /home/claude -- command -v claude &>/dev/null 2>&1; then
   skip "Claude Code already installed in VM"
 else
   limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
-  limactl shell pai -- bash /home/claude/provision-vm.sh
+  limactl shell pai --workdir /home/claude -- bash /home/claude/provision-vm.sh
   ok "Sandbox provisioned"
 fi
 
@@ -239,7 +239,7 @@ echo "        To authenticate Claude Code, launch a workspace and follow the pro
 echo "        ./launch-host.sh"
 echo ""
 echo "        Or authenticate directly:"
-echo "        limactl shell pai -- claude"
+echo "        limactl shell pai --workdir /home/claude -- claude"
 ok "Claude Code ready — authenticate on first workspace launch"
 
 # ─── Done ─────────────────────────────────────────────────────

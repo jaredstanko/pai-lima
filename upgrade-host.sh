@@ -136,7 +136,7 @@ limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
 # Re-run the .bashrc environment block from provision-vm.sh (idempotent),
 # then update system packages
-limactl shell pai -- bash -c '
+limactl shell pai --workdir /home/claude -- bash -c '
   SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
 
   if grep -qF "$SENTINEL" ~/.bashrc 2>/dev/null; then
@@ -188,7 +188,7 @@ ok "VM environment and packages updated"
 
 step "Upgrading Claude Code in VM..."
 
-limactl shell pai -- bash -lc '
+limactl shell pai --workdir /home/claude -- bash -lc '
   CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "")
 
   if [ -z "$CLAUDE_PATH" ]; then
