@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STEP=0
-TOTAL=9
+TOTAL=10
 
 # ─── Colors and helpers ───────────────────────────────────────
 
@@ -143,7 +143,41 @@ else
   ok "VM 'pai' created and started (4 CPU, 4 GB RAM, 40 GB disk)"
 fi
 
-# ─── Step 5: Provision sandbox ────────────────────────────────
+# ─── Step 5: Reboot VM and verify audio ──────────────────────
+
+step "Rebooting VM to load sound kernel modules..."
+
+echo "        Stopping VM..."
+limactl stop pai
+ok "VM stopped"
+
+echo "        Starting VM..."
+limactl start pai
+ok "VM restarted"
+
+# Wait for PulseAudio to come up
+sleep 3
+
+echo "        Playing test sound inside VM..."
+# Generate a 1-second 440Hz sine wave and play it through ALSA/PulseAudio
+limactl shell pai -- bash -c '
+  export PULSE_SERVER=unix:/run/pulse/native
+  # Generate a short beep using speaker-test (part of alsa-utils)
+  timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true
+'
+
+echo ""
+echo -e "        ${YELLOW}▸ Did you hear a tone from your Mac speakers? [y/N]${NC}"
+read -r HEARD_SOUND
+
+if [[ "$HEARD_SOUND" =~ ^[Yy] ]]; then
+  ok "Audio passthrough confirmed"
+else
+  echo -e "        ${YELLOW}⊘${NC} Audio not heard — this is non-blocking, continuing setup."
+  echo "        You can troubleshoot later: limactl shell pai -- speaker-test -t sine -f 440 -l 1"
+fi
+
+# ─── Step 6: Provision sandbox ────────────────────────────────
 
 step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
@@ -157,7 +191,7 @@ else
   ok "Sandbox provisioned"
 fi
 
-# ─── Step 6: Configure terminal keybindings ───────────────────
+# ─── Step 7: Configure terminal keybindings ───────────────────
 
 step "Verifying terminal configuration..."
 
@@ -167,7 +201,7 @@ echo "          • Remote control enabled for PAI-Status integration"
 echo "          • Config installed at ~/.config/kitty/kitty.conf"
 ok "kitty configured (see config/kitty.conf)"
 
-# ─── Step 7: Build and install menu bar app ───────────────────
+# ─── Step 8: Build and install menu bar app ───────────────────
 
 step "Building PAI-Status menu bar app..."
 
@@ -187,7 +221,7 @@ ok "PAI-Status running in menu bar"
 
 cd "$SCRIPT_DIR"
 
-# ─── Step 8: Set up browser bookmark ─────────────────────────
+# ─── Step 9: Set up browser bookmark ─────────────────────────
 
 step "Setting up browser bookmarks..."
 
@@ -196,7 +230,7 @@ cp "$SCRIPT_DIR/config/portal.webloc" "$BOOKMARK_DEST"
 ok "Portal bookmark created on Desktop: PAI Portal.webloc"
 ok "Portal URL: http://localhost:8080"
 
-# ─── Step 9: Claude Code authentication ──────────────────────
+# ─── Step 10: Claude Code authentication ─────────────────────
 
 step "Claude Code authentication..."
 
