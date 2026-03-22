@@ -7,7 +7,7 @@ A sandboxed AI workspace running PAI + Claude Code on a Lima VM (Ubuntu 24.04 AR
 - **Sandboxed VM** — Claude Code runs in an isolated Ubuntu VM, not on your Mac
 - **PAI v4.0** — [Personal AI Infrastructure](https://github.com/danielmiessler/Personal_AI_Infrastructure) with skills, tools, and memory
 - **PAI Companion** — [Web portal](https://github.com/chriscantey/pai-companion) at `http://localhost:8080` for dashboards and file exchange
-- **Menu bar app** — PAI Status shows VM status, starts/stops the VM, and opens workspaces from a tray icon
+- **Menu bar app** — PAI-Status shows VM status, starts/stops the VM, and opens workspaces from a tray icon
 - **Persistent workspaces** — tmux sessions in the VM survive app restarts, SSH disconnects, and sleep/wake
 - **Shared folders** — `~/pai-workspace/` on your Mac is shared with the VM for file exchange
 - **Audio passthrough** — VirtIO sound device routes VM audio to your Mac speakers
@@ -36,15 +36,15 @@ The installer walks you through 9 steps:
 4. Creates and starts the Lima VM
 5. Provisions the VM (Claude Code, PAI, tools — takes 3-5 minutes on first run)
 6. Verifies terminal keybinding compatibility
-7. Builds and installs the PAI Status menu bar app
+7. Builds and installs the PAI-Status menu bar app
 8. Creates a portal bookmark on your Desktop
 9. Provides authentication instructions
 
-After setup completes, you'll see PAI Status in your menu bar.
+After setup completes, you'll see PAI-Status in your menu bar.
 
 ## Daily Use
 
-Everything is controlled from the **PAI Status menu bar icon** — no terminal commands needed.
+Everything is controlled from the **PAI-Status menu bar icon** — no terminal commands needed.
 
 ### Start your workspaces
 
@@ -57,26 +57,44 @@ If no sessions exist yet, a default "pai" workspace is created with PAI auto-sta
 ### Menu bar controls
 
 ```
-● PAI                          ← green dot = VM running
-├─ VM: Running
-├─ Start VM / Stop VM          ← one-click VM control
-├─ Open Workspaces             ← opens cmux with all active sessions
+● PAI                          ← green dot = running, red = stopped
+├─ VM: Running                 ← current VM status
+├─ Start VM                    ← start the Lima VM
+├─ Stop VM                     ← gracefully stop the VM
+├─ Restart VM                  ← stop then start the VM
 ├─ ─────────────────────────
+├─ Open Workspaces             ← opens cmux with all active sessions
 ├─ New Claude Session…         ← create a named workspace
 ├─ Active Sessions             ← submenu: click to reattach
 │   ├─ research (2 windows)
 │   └─ debug (1 window)
 ├─ ─────────────────────────
-├─ Open Portal                 ← opens http://localhost:8080
-├─ Open in Terminal            ← plain shell, no tmux
+├─ Open PAI Web                ← opens http://localhost:8080
+├─ Open in Terminal            ← plain shell in cmux, no tmux
 ├─ ─────────────────────────
-├─ Launch at Login ☐           ← toggle: start PAI Status on login
-└─ Quit PAI Status
+├─ Launch at Login ☐           ← toggle: start PAI-Status on login
+└─ Quit PAI-Status
 ```
+
+### Menu options explained
+
+| Menu Item | Description |
+|-----------|-------------|
+| **VM: Running/Stopped** | Shows the current state of the Lima VM. Updates every 5 seconds. |
+| **Start VM** | Starts the Lima VM (`limactl start pai`). Disabled when the VM is already running or transitioning. |
+| **Stop VM** | Gracefully stops the VM (`limactl stop pai`). Disabled when the VM is already stopped or transitioning. |
+| **Restart VM** | Stops then starts the VM in sequence. Useful after configuration changes. Disabled when the VM is stopped. |
+| **Open Workspaces** | Opens cmux and restores one tab per active tmux session in the VM. If no sessions exist, creates a default "pai" workspace with Claude Code auto-started. This is the primary way to open your AI workspaces. |
+| **New Claude Session…** | Prompts for a session name, then creates a new tmux session inside the VM with Claude Code (PAI) auto-started. Opens in a new cmux tab. |
+| **Active Sessions** | Submenu listing all tmux sessions running inside the VM. Click any session to reattach to it in a cmux tab. Shows window count and attached status. |
+| **Open PAI Web** | Opens the PAI Companion web portal at `http://localhost:8080` in your default browser. The portal provides dashboards, reports, and a file exchange UI. |
+| **Open in Terminal** | Opens a plain shell session in cmux connected to the VM — no tmux, no Claude Code. Useful for manual VM administration. |
+| **Launch at Login** | Toggle to auto-start PAI-Status when you log in to your Mac. Installs a LaunchAgent. The VM does not auto-start — you still click "Start VM" when ready. |
+| **Quit PAI-Status** | Exits the menu bar app. Does not stop the VM or close cmux — your sessions continue running. |
 
 ### Launch at Login
 
-Enable **Launch at Login** in the menu to have PAI Status start automatically when you open your Mac. The VM won't auto-start — you still click "Start VM" when you're ready.
+Enable **Launch at Login** in the menu to have PAI-Status start automatically when you open your Mac. The VM won't auto-start — you still click "Start VM" when you're ready.
 
 ## Shared Files
 
@@ -188,7 +206,7 @@ git pull
 
 This safely upgrades:
 - Host tools (Lima, cmux)
-- PAI Status menu bar app (rebuilt with latest features)
+- PAI-Status menu bar app (rebuilt with latest features)
 - VM networking (adds vzNAT + localhost:8080 port forwarding if missing)
 - VM system packages and shell aliases
 - Portal bookmark
@@ -297,7 +315,7 @@ pai-lima/
 
 **Setup fails at "Creating sandbox VM"** — Make sure no existing VM named "pai" is in a bad state. Run `limactl delete pai --force` and re-run `./setup-host.sh`.
 
-**PAI Status not in menu bar** — Run `open -a "PAI Status"` or rebuild: `cd menubar && ./build.sh --install`.
+**PAI-Status not in menu bar** — Run `open -a "PAI-Status"` or rebuild: `cd menubar && ./build.sh --install`.
 
 **Portal not loading at localhost:8080** — Check the service inside the VM: `limactl shell pai -- systemctl --user status pai-portal`. The VM must be running and vzNAT networking must be enabled (it is by default in pai.yaml).
 

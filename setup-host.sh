@@ -167,21 +167,21 @@ ok "Keybinding documentation at config/terminal.conf"
 
 # ─── Step 7: Build and install menu bar app ───────────────────
 
-step "Building PAI Status menu bar app..."
+step "Building PAI-Status menu bar app..."
 
 cd "$SCRIPT_DIR/menubar"
 
-if [ -d "/Applications/PAIStatus.app" ]; then
+if [ -d "/Applications/PAI-Status.app" ]; then
   # Rebuild to pick up new features (Open Portal, etc.)
-  echo "        Updating PAI Status app..."
+  echo "        Updating PAI-Status app..."
 fi
 
 bash build.sh --install
-ok "PAI Status installed to /Applications"
+ok "PAI-Status installed to /Applications"
 
 # Launch it
-open -a "PAI Status" 2>/dev/null || true
-ok "PAI Status running in menu bar"
+open /Applications/PAI-Status.app 2>/dev/null || true
+ok "PAI-Status running in menu bar"
 
 cd "$SCRIPT_DIR"
 
@@ -213,7 +213,7 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo -e "${BOLD}${GREEN}  Setup complete!${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${GREEN}●${NC} PAI Status is in your menu bar (top right)"
+echo -e "  ${GREEN}●${NC} PAI-Status is in your menu bar (top right)"
 echo -e "  📂 Shared files: ~/pai-workspace/"
 echo -e "  🌐 Portal: http://localhost:8080 (bookmark on Desktop)"
 echo -e "  🖥️  To open workspaces: ${BOLD}./launch.sh${NC}"

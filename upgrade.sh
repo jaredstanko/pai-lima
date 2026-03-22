@@ -4,7 +4,7 @@
 #
 # What this upgrades:
 #   - Host tools (Lima, cmux via brew)
-#   - PAI Status menu bar app (rebuilt from source)
+#   - PAI-Status menu bar app (rebuilt from source)
 #   - Portal bookmark on Desktop
 #   - VM networking (adds vzNAT + port forwarding if missing)
 #   - VM-side tools and aliases (re-runs provision.sh in safe mode)
@@ -155,15 +155,15 @@ ok "VM aliases and packages updated"
 
 # ─── Step 5: Rebuild menu bar app ─────────────────────────────
 
-step "Rebuilding PAI Status menu bar app..."
+step "Rebuilding PAI-Status menu bar app..."
 
 cd "$SCRIPT_DIR/menubar"
 bash build.sh --install
-ok "PAI Status rebuilt and installed"
+ok "PAI-Status rebuilt and installed"
 
 # Relaunch
-open -a "PAI Status" 2>/dev/null || true
-ok "PAI Status running"
+open /Applications/PAI-Status.app 2>/dev/null || true
+ok "PAI-Status running"
 cd "$SCRIPT_DIR"
 
 # ─── Step 6: Update portal bookmark ──────────────────────────
@@ -188,7 +188,7 @@ echo "    • Active tmux sessions"
 echo ""
 echo "  What was updated:"
 echo "    • Host tools (Lima, cmux)"
-echo "    • PAI Status menu bar app"
+echo "    • PAI-Status menu bar app"
 echo "    • VM networking (vzNAT → localhost:8080)"
 echo "    • VM system packages and aliases"
 echo "    • Portal bookmark"

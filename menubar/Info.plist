@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>PAI Status</string>
+    <string>PAI-Status</string>
     <key>CFBundleDisplayName</key>
-    <string>PAI Status</string>
+    <string>PAI-Status</string>
     <key>CFBundleIdentifier</key>
     <string>com.pai.status</string>
     <key>CFBundleVersion</key>
