@@ -134,24 +134,55 @@ step "Updating VM tools and aliases..."
 # Copy latest provision script
 limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
-# Only update aliases and system packages — don't reinstall PAI or Companion
+# Re-run the .bashrc environment block from provision-vm.sh (idempotent),
+# then update system packages
 limactl shell pai -- bash -c '
-  # Ensure pai alias exists
-  if ! grep -q "alias pai=" ~/.bashrc 2>/dev/null; then
-    echo "" >> ~/.bashrc
-    echo "# PAI launcher" >> ~/.bashrc
-    echo "alias pai='\''bun /home/claude/.claude/PAI/Tools/pai.ts'\''" >> ~/.bashrc
-    echo "[+] Added pai alias"
-  else
-    echo "[=] pai alias already exists"
+  SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
+
+  if grep -qF "$SENTINEL" ~/.bashrc 2>/dev/null; then
+    sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" ~/.bashrc
   fi
+
+  cat >> ~/.bashrc <<'\''ENVBLOCK'\''
+
+# --- PAI environment (managed by provision-vm.sh) ---
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Claude Code
+export PATH="$HOME/.claude/bin:$PATH"
+
+# Local binaries (pip --user, etc.)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Go
+export PATH="$HOME/go/bin:$PATH"
+
+# Node global (npm install -g)
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# Terminal — kitty-terminfo is installed in the VM
+export TERM=xterm-kitty
+
+# Default editor
+export EDITOR=nano
+
+# PAI launcher
+alias pai='\''bun $HOME/.claude/PAI/Tools/pai.ts'\''
+
+# --- end PAI environment ---
+ENVBLOCK
+
+  echo "[+] PAI environment block updated in .bashrc"
 
   # Update system packages
   sudo apt-get update -qq 2>/dev/null
   sudo apt-get upgrade -y -qq 2>/dev/null
   echo "[+] System packages updated"
 '
-ok "VM aliases and packages updated"
+ok "VM environment and packages updated"
 
 # ─── Step 5: Rebuild menu bar app ─────────────────────────────
 

@@ -60,25 +60,6 @@ fi
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-if ! grep -q 'BUN_INSTALL' ~/.bashrc 2>/dev/null; then
-  cat >> ~/.bashrc <<'BUNPATH'
-
-# Bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-BUNPATH
-  log "Added Bun to PATH in .bashrc"
-fi
-
-if ! grep -q '\.local/bin' ~/.bashrc 2>/dev/null; then
-  cat >> ~/.bashrc <<'LOCALPATH'
-
-# Local binaries
-export PATH="$HOME/.local/bin:$PATH"
-LOCALPATH
-  log "Added ~/.local/bin to PATH in .bashrc"
-fi
-
 # -----------------------------------------------------------
 # Step 3: Claude Code
 # -----------------------------------------------------------
@@ -87,15 +68,74 @@ if command -v claude &>/dev/null; then
 else
   log "Installing Claude Code..."
   curl -fsSL https://claude.ai/install.sh | bash
-  export PATH="$HOME/.claude/bin:$PATH"
 fi
 
-# Make sure claude is on PATH for the PAI installer
+# Make sure claude is on PATH for the rest of this script
 export PATH="$HOME/.claude/bin:$PATH"
 
 echo ""
 warn "After this script finishes, run 'claude' to authenticate with your Anthropic API key."
 echo ""
+
+# -----------------------------------------------------------
+# Step 3b: Shell environment (.bashrc)
+# -----------------------------------------------------------
+log "Ensuring .bashrc has correct PATH and settings..."
+
+# Build a block with all PATH entries and settings, guarded by a sentinel
+# so we can update it idempotently on re-runs.
+SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
+
+if grep -qF "$SENTINEL" ~/.bashrc 2>/dev/null; then
+  # Remove the old managed block so we can replace it
+  sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" ~/.bashrc
+  log "Replacing existing PAI environment block in .bashrc"
+fi
+
+cat >> ~/.bashrc <<'ENVBLOCK'
+
+# --- PAI environment (managed by provision-vm.sh) ---
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Claude Code
+export PATH="$HOME/.claude/bin:$PATH"
+
+# Local binaries (pip --user, etc.)
+export PATH="$HOME/.local/bin:$PATH"
+
+# Go
+export PATH="$HOME/go/bin:$PATH"
+
+# Node global (npm install -g)
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# Terminal — kitty-terminfo is installed in the VM
+export TERM=xterm-kitty
+
+# Default editor
+export EDITOR=nano
+
+# PAI launcher
+alias pai='bun $HOME/.claude/PAI/Tools/pai.ts'
+
+# --- end PAI environment ---
+ENVBLOCK
+
+log "PAI environment block written to .bashrc"
+
+# Configure npm global prefix so `npm install -g` doesn't need sudo
+mkdir -p "$HOME/.npm-global"
+if ! npm config get prefix 2>/dev/null | grep -q '.npm-global'; then
+  npm config set prefix "$HOME/.npm-global"
+  log "npm global prefix set to ~/.npm-global"
+fi
+
+# Apply for the rest of this script
+export PATH="$HOME/.claude/bin:$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:$PATH"
+export TERM=xterm-kitty
 
 # -----------------------------------------------------------
 # Step 4: PAI v4.0
@@ -128,14 +168,6 @@ else
 
   rm -rf /tmp/PAI
   log "PAI installed."
-fi
-
-# Ensure pai alias exists in .bashrc
-if ! grep -q "alias pai=" ~/.bashrc 2>/dev/null; then
-  echo "" >> ~/.bashrc
-  echo "# PAI launcher" >> ~/.bashrc
-  echo "alias pai='bun /home/claude/.claude/PAI/Tools/pai.ts'" >> ~/.bashrc
-  log "Added 'pai' alias to .bashrc"
 fi
 
 source ~/.bashrc 2>/dev/null || true
@@ -524,6 +556,22 @@ check() {
 # Core tools
 command -v bun &>/dev/null && check "Bun installed" "PASS" || check "Bun installed" "FAIL"
 command -v claude &>/dev/null && check "Claude Code installed" "PASS" || check "Claude Code installed" "FAIL"
+
+# Shell environment
+grep -qF "# --- PAI environment (managed by provision-vm.sh) ---" ~/.bashrc 2>/dev/null \
+  && check ".bashrc PAI environment block" "PASS" || check ".bashrc PAI environment block" "FAIL"
+
+grep -q 'BUN_INSTALL' ~/.bashrc 2>/dev/null \
+  && check ".bashrc Bun PATH" "PASS" || check ".bashrc Bun PATH" "FAIL"
+
+grep -q '\.claude/bin' ~/.bashrc 2>/dev/null \
+  && check ".bashrc Claude Code PATH" "PASS" || check ".bashrc Claude Code PATH" "FAIL"
+
+grep -q 'TERM=xterm-kitty' ~/.bashrc 2>/dev/null \
+  && check ".bashrc TERM=xterm-kitty" "PASS" || check ".bashrc TERM=xterm-kitty" "FAIL"
+
+grep -q 'alias pai=' ~/.bashrc 2>/dev/null \
+  && check ".bashrc pai alias" "PASS" || check ".bashrc pai alias" "FAIL"
 
 # Directories
 test -d ~/portal && test -d ~/exchange && test -d ~/work && test -d ~/data && test -d ~/upstream \
