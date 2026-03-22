@@ -138,30 +138,24 @@ limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
 # then update system packages
 limactl shell pai --workdir /home/claude -- bash -c '
   SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
-
-  if grep -qF "$SENTINEL" ~/.bashrc 2>/dev/null; then
-    sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" ~/.bashrc
-  fi
-
-  cat >> ~/.bashrc <<'\''ENVBLOCK'\''
-
+  ENV_BLOCK="
 # --- PAI environment (managed by provision-vm.sh) ---
 
 # Bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+export BUN_INSTALL=\"\$HOME/.bun\"
+export PATH=\"\$BUN_INSTALL/bin:\$PATH\"
 
 # Claude Code
-export PATH="$HOME/.claude/bin:$PATH"
+export PATH=\"\$HOME/.claude/bin:\$PATH\"
 
 # Local binaries (pip --user, etc.)
-export PATH="$HOME/.local/bin:$PATH"
+export PATH=\"\$HOME/.local/bin:\$PATH\"
 
 # Go
-export PATH="$HOME/go/bin:$PATH"
+export PATH=\"\$HOME/go/bin:\$PATH\"
 
 # Node global (npm install -g)
-export PATH="$HOME/.npm-global/bin:$PATH"
+export PATH=\"\$HOME/.npm-global/bin:\$PATH\"
 
 # Terminal — kitty-terminfo is installed in the VM
 export TERM=xterm-kitty
@@ -170,12 +164,20 @@ export TERM=xterm-kitty
 export EDITOR=nano
 
 # PAI launcher
-alias pai='\''bun $HOME/.claude/PAI/Tools/pai.ts'\''
+alias pai='\''bun \$HOME/.claude/PAI/Tools/pai.ts'\''
 
 # --- end PAI environment ---
-ENVBLOCK
+"
 
-  echo "[+] PAI environment block updated in .bashrc"
+  for rcfile in ~/.bashrc ~/.zshrc; do
+    touch "$rcfile"
+    if grep -qF "$SENTINEL" "$rcfile" 2>/dev/null; then
+      sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" "$rcfile"
+    fi
+    echo "$ENV_BLOCK" >> "$rcfile"
+  done
+
+  echo "[+] PAI environment block updated in .bashrc and .zshrc"
 
   # Update system packages
   sudo apt-get update -qq 2>/dev/null

@@ -95,20 +95,12 @@ echo ""
 # -----------------------------------------------------------
 # Step 3b: Shell environment (.bashrc)
 # -----------------------------------------------------------
-log "Ensuring .bashrc has correct PATH and settings..."
+log "Ensuring .bashrc and .zshrc have correct PATH and settings..."
 
 # Build a block with all PATH entries and settings, guarded by a sentinel
 # so we can update it idempotently on re-runs.
 SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
-
-if grep -qF "$SENTINEL" ~/.bashrc 2>/dev/null; then
-  # Remove the old managed block so we can replace it
-  sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" ~/.bashrc
-  log "Replacing existing PAI environment block in .bashrc"
-fi
-
-cat >> ~/.bashrc <<'ENVBLOCK'
-
+ENV_BLOCK='
 # --- PAI environment (managed by provision-vm.sh) ---
 
 # Bun
@@ -134,12 +126,21 @@ export TERM=xterm-kitty
 export EDITOR=nano
 
 # PAI launcher
-alias pai='bun $HOME/.claude/PAI/Tools/pai.ts'
+alias pai='\''bun $HOME/.claude/PAI/Tools/pai.ts'\''
 
 # --- end PAI environment ---
-ENVBLOCK
+'
 
-log "PAI environment block written to .bashrc"
+# Write to both .bashrc and .zshrc
+for rcfile in ~/.bashrc ~/.zshrc; do
+  touch "$rcfile"
+  if grep -qF "$SENTINEL" "$rcfile" 2>/dev/null; then
+    sed -i "/$SENTINEL/,/# --- end PAI environment ---/d" "$rcfile"
+  fi
+  echo "$ENV_BLOCK" >> "$rcfile"
+done
+
+log "PAI environment block written to .bashrc and .zshrc"
 
 # Configure npm global prefix so `npm install -g` doesn't need sudo
 mkdir -p "$HOME/.npm-global"
@@ -182,16 +183,28 @@ else
   fi
 
   rm -rf /tmp/PAI
+
+  # Ensure PAI core skill is at the expected path for validation
+  if [ -d "$HOME/.claude/PAI" ] && [ ! -d "$HOME/.claude/skills/PAI" ]; then
+    mkdir -p "$HOME/.claude/skills"
+    ln -sf "$HOME/.claude/PAI" "$HOME/.claude/skills/PAI"
+    log "Symlinked ~/.claude/PAI → ~/.claude/skills/PAI"
+  fi
+
   log "PAI installed."
 fi
 
 source ~/.bashrc 2>/dev/null || true
 
 # -----------------------------------------------------------
-# Step 4b: Write .env to ~/.claude (Lima mount from host ~/pai-workspace/claude-home)
+# Step 4b: Detect VM IP and write .env
 # -----------------------------------------------------------
-# ~/.claude is a Lima mount point — it exists from boot but may be empty.
-# Ensure the mount is writable before writing.
+# Use localhost since Lima port-forwards guest ports to the host
+VM_IP="localhost"
+echo "$VM_IP" > ~/.vm-ip
+log "VM IP: $VM_IP (Lima port-forwards to host)"
+
+# Write .env to ~/.claude (Lima mount from host ~/pai-workspace/claude-home)
 if [ -d "$HOME/.claude" ] && touch "$HOME/.claude/.env-test" 2>/dev/null; then
   rm -f "$HOME/.claude/.env-test"
   if [ -f ~/.claude/.env ]; then
@@ -237,17 +250,7 @@ else
   warn "Statusline patch script not found — skipping."
 fi
 
-# --- Phase 1: System Discovery and IP Configuration ---
-log "Phase 1: Configuring VM IP..."
-VM_IP=$(hostname -I | awk '{print $1}')
-if [ -z "$VM_IP" ] || [ "$VM_IP" = "127.0.0.1" ]; then
-  warn "Could not detect a valid VM IP. Falling back to 127.0.0.1"
-  VM_IP="127.0.0.1"
-fi
-echo "$VM_IP" > ~/.vm-ip
-
-# .env will be written after PAI install ensures ~/.claude exists (see Step 4b)
-log "VM IP: $VM_IP (saved to ~/.vm-ip)"
+# --- Phase 1: VM IP already detected in Step 4b ($VM_IP) ---
 
 # --- Phase 2: Directory Structure ---
 log "Phase 2: Setting up directories..."
