@@ -40,7 +40,7 @@ fail() { echo -e "        ${RED}✗${NC} $1"; exit 1; }
 
 # Run limactl shell from /tmp to prevent Lima from trying to cd into
 # the host's cwd (which doesn't exist inside the VM).
-vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude "$@"); }
+vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude -- "$@"); }
 
 # ─── Banner ───────────────────────────────────────────────────
 
@@ -173,7 +173,7 @@ sleep 3
 echo "        Playing test sound inside VM..."
 # Generate a 1-second 440Hz sine wave and play it through ALSA/PulseAudio
 # Run from /tmp to avoid Lima trying to cd into the host's cwd inside the VM
-vm_run -- bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
+vm_run bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
 
 echo ""
 echo -e "        ${YELLOW}▸ Did you hear a tone from your Mac speakers? [y/N]${NC}"
@@ -192,11 +192,11 @@ step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
 # Check if already provisioned (claude command exists in VM)
-if vm_run -- command -v claude &>/dev/null 2>&1; then
+if vm_run command -v claude &>/dev/null 2>&1; then
   skip "Claude Code already installed in VM"
 else
   limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
-  vm_run -- bash /home/claude/provision-vm.sh
+  vm_run bash /home/claude/provision-vm.sh
   ok "Sandbox provisioned"
 fi
 
