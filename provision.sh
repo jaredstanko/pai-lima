@@ -70,6 +70,15 @@ BUNPATH
   log "Added Bun to PATH in .bashrc"
 fi
 
+if ! grep -q '\.local/bin' ~/.bashrc 2>/dev/null; then
+  cat >> ~/.bashrc <<'LOCALPATH'
+
+# Local binaries
+export PATH="$HOME/.local/bin:$PATH"
+LOCALPATH
+  log "Added ~/.local/bin to PATH in .bashrc"
+fi
+
 # -----------------------------------------------------------
 # Step 3: Claude Code
 # -----------------------------------------------------------
