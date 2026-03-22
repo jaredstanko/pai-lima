@@ -107,4 +107,4 @@ provision:
       systemctl enable pulseaudio.service
 
       # Install optional but recommended CLI tools
-      apt-get install -y -qq jq tree tmux wget whois dnsutils imagemagick ffmpeg python3-venv
+      apt-get install -y -qq jq tree tmux wget whois dnsutils imagemagick ffmpeg python3-venv kitty-terminfo
