@@ -332,7 +332,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTerminal() {
-        openKittyWindow(title: "PAI Shell", args: ["limactl", "shell", vmName, "--workdir", "/home/claude"])
+        openKittyWindow(title: "PAI Shell", args: ["limactl", "shell", vmName])
     }
 
     // MARK: - Session Management
@@ -340,7 +340,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func newSession() {
         // Open kitty window that shells into VM and runs PAI
         openKittyWindow(title: "PAI", args: [
-            "limactl", "shell", vmName, "--workdir", "/home/claude", "--",
+            "limactl", "shell", vmName,
             "bash", "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
         ])
     }
@@ -348,7 +348,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func resumeSession() {
         // Open kitty window with claude -r (interactive session picker)
         openKittyWindow(title: "Resume Session", args: [
-            "limactl", "shell", vmName, "--workdir", "/home/claude", "--",
+            "limactl", "shell", vmName,
             "bash", "-lc", "claude -r"
         ])
     }

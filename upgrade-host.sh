@@ -40,10 +40,6 @@ step() {
 ok()   { echo -e "        ${GREEN}✓${NC} $1"; }
 skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already up to date)"; }
 
-# Run limactl shell from /tmp to prevent Lima from trying to cd into
-# the host's cwd (which doesn't exist inside the VM).
-vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude "$@"); }
-
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  Sandbox My AI — PAI Lima Upgrade${NC}"
@@ -140,7 +136,7 @@ limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
 # Re-run the .bashrc environment block from provision-vm.sh (idempotent),
 # then update system packages
-vm_run bash -c '
+limactl shell pai bash -c '
   SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
   ENV_BLOCK="
 # --- PAI environment (managed by provision-vm.sh) ---
@@ -194,7 +190,7 @@ ok "VM environment and packages updated"
 
 step "Upgrading Claude Code in VM..."
 
-vm_run bash -lc '
+limactl shell pai bash -lc '
   CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "")
 
   if [ -z "$CLAUDE_PATH" ]; then
