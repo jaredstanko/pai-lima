@@ -19,7 +19,7 @@ user:
 
 cpus: 4
 memory: 4096MiB
-disk: 40GiB
+disk: 50GiB
 
 mounts:
   - location: "~/pai-workspace/claude-home"
