@@ -42,7 +42,7 @@ skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already up to date)"; }
 
 # Run limactl shell from /tmp to prevent Lima from trying to cd into
 # the host's cwd (which doesn't exist inside the VM).
-vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude -- "$@"); }
+vm_run() { (cd /tmp && limactl shell pai --workdir /home/claude "$@"); }
 
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
