@@ -63,14 +63,13 @@ If no sessions exist yet, a default "pai" workspace is created with PAI auto-sta
 ├─ Stop VM                     ← gracefully stop the VM
 ├─ Restart VM                  ← stop then start the VM
 ├─ ─────────────────────────
-├─ Open Workspaces             ← opens cmux with all active sessions
-├─ New Claude Session…         ← create a named workspace
+├─ New PAI Session…            ← create a named workspace with PAI
 ├─ Active Sessions             ← submenu: click to reattach
 │   ├─ research (2 windows)
 │   └─ debug (1 window)
 ├─ ─────────────────────────
 ├─ Open PAI Web                ← opens http://localhost:8080
-├─ Open in Terminal            ← plain shell in cmux, no tmux
+├─ Open a Terminal             ← plain shell in cmux, no tmux
 ├─ ─────────────────────────
 ├─ Launch at Login ☐           ← toggle: start PAI-Status on login
 └─ Quit PAI-Status
@@ -84,11 +83,10 @@ If no sessions exist yet, a default "pai" workspace is created with PAI auto-sta
 | **Start VM** | Starts the Lima VM (`limactl start pai`). Disabled when the VM is already running or transitioning. |
 | **Stop VM** | Gracefully stops the VM (`limactl stop pai`). Disabled when the VM is already stopped or transitioning. |
 | **Restart VM** | Stops then starts the VM in sequence. Useful after configuration changes. Disabled when the VM is stopped. |
-| **Open Workspaces** | Opens cmux and restores one tab per active tmux session in the VM. If no sessions exist, creates a default "pai" workspace with Claude Code auto-started. This is the primary way to open your AI workspaces. |
-| **New Claude Session…** | Prompts for a session name, then creates a new tmux session inside the VM with Claude Code (PAI) auto-started. Opens in a new cmux tab. |
+| **New PAI Session…** | Prompts for a session name, then creates a new tmux session inside the VM with PAI (Claude Code) auto-started. Opens in a new cmux tab. |
 | **Active Sessions** | Submenu listing all tmux sessions running inside the VM. Click any session to reattach to it in a cmux tab. Shows window count and attached status. |
 | **Open PAI Web** | Opens the PAI Companion web portal at `http://localhost:8080` in your default browser. The portal provides dashboards, reports, and a file exchange UI. |
-| **Open in Terminal** | Opens a plain shell session in cmux connected to the VM — no tmux, no Claude Code. Useful for manual VM administration. |
+| **Open a Terminal** | Opens a plain shell session in cmux connected to the VM — no tmux, no PAI. Useful for manual VM administration. |
 | **Launch at Login** | Toggle to auto-start PAI-Status when you log in to your Mac. Installs a LaunchAgent. The VM does not auto-start — you still click "Start VM" when ready. |
 | **Quit PAI-Status** | Exits the menu bar app. Does not stop the VM or close cmux — your sessions continue running. |
 

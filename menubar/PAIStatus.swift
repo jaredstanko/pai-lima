@@ -49,7 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Constants
     private let vmName = "pai"
     private let portalURL = "http://localhost:8080"
-    private let openWorkspacesTag = 99
     private let portalMenuTag = 100
     private let terminalMenuTag = 101
 
@@ -110,14 +109,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Open Workspaces — primary action: opens cmux with all active sessions
-        let openWorkspacesItem = NSMenuItem(title: "Open Workspaces", action: #selector(openWorkspaces), keyEquivalent: "o")
-        openWorkspacesItem.target = self
-        openWorkspacesItem.tag = openWorkspacesTag
-        menu.addItem(openWorkspacesItem)
-
-        // New Claude Session
-        newSessionMenuItem = NSMenuItem(title: "New Claude Session…", action: #selector(newSession), keyEquivalent: "n")
+        // New PAI Session
+        newSessionMenuItem = NSMenuItem(title: "New PAI Session…", action: #selector(newSession), keyEquivalent: "n")
         newSessionMenuItem.target = self
         menu.addItem(newSessionMenuItem)
 
@@ -135,8 +128,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         webItem.tag = portalMenuTag
         menu.addItem(webItem)
 
-        // Open in Terminal (plain shell)
-        let terminalItem = NSMenuItem(title: "Open in Terminal", action: #selector(openTerminal), keyEquivalent: "t")
+        // Open a Terminal (plain shell)
+        let terminalItem = NSMenuItem(title: "Open a Terminal", action: #selector(openTerminal), keyEquivalent: "t")
         terminalItem.target = self
         terminalItem.tag = terminalMenuTag
         menu.addItem(terminalItem)
@@ -242,7 +235,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.restartMenuItem.isEnabled = running && !transitioning
                 self.newSessionMenuItem.isEnabled = running
                 if let menu = self.statusItem.menu {
-                    menu.item(withTag: self.openWorkspacesTag)?.isEnabled = running
                     menu.item(withTag: self.portalMenuTag)?.isEnabled = running
                     menu.item(withTag: self.terminalMenuTag)?.isEnabled = running
                 }
@@ -332,57 +324,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Open Workspaces
-
-    @objc private func openWorkspaces() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            // Query VM for all active tmux sessions
-            let (exitCode, output) = self.runProcess(
-                "/usr/bin/env",
-                args: ["limactl", "shell", self.vmName, "--", "tmux", "list-sessions", "-F", "#{session_name}"],
-                timeout: 10
-            )
-
-            let sessions: [String]
-            if exitCode == 0, let output = output, !output.isEmpty {
-                sessions = output.components(separatedBy: "\n").filter { !$0.isEmpty }
-            } else {
-                sessions = []
-            }
-
-            let wasRunning = self.isCmuxRunning()
-            self.ensureCmuxRunning()
-
-            if sessions.isEmpty {
-                // No active sessions — create default "pai" workspace with Claude Code
-                // The command shells into the VM, starts tmux, then launches PAI
-                let paiCmd = "limactl shell \(self.vmName) -- tmux new-session -As pai \\; send-keys 'bun /home/claude/.claude/PAI/Tools/pai.ts' Enter"
-                if wasRunning {
-                    self.openCmuxWorkspace(command: paiCmd, name: "pai")
-                } else {
-                    // cmux just launched — replace its default workspace instead of creating a second one
-                    self.replaceDefaultWorkspace(command: paiCmd, name: "pai")
-                }
-            } else {
-                // Restore one cmux tab per active session
-                var isFirst = !wasRunning
-                for name in sessions {
-                    let command = "limactl shell \(self.vmName) -- tmux new-session -As \(name)"
-                    if isFirst {
-                        // Replace cmux's default workspace with the first session
-                        self.replaceDefaultWorkspace(command: command, name: name)
-                        isFirst = false
-                    } else {
-                        self.openCmuxWorkspace(command: command, name: name)
-                    }
-                    Thread.sleep(forTimeInterval: 0.3)
-                }
-            }
-        }
-    }
-
     // MARK: - Portal & Terminal
 
     @objc private func openPortal() {
@@ -403,7 +344,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func newSession() {
         let alert = NSAlert()
-        alert.messageText = "New Claude Session"
+        alert.messageText = "New PAI Session"
         alert.informativeText = "Enter a name for the tmux session:"
         alert.addButton(withTitle: "Create")
         alert.addButton(withTitle: "Cancel")
