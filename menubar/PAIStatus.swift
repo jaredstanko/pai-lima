@@ -302,22 +302,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTerminal() {
-        openKittyWindow(title: "PAI Shell", args: ["limactl", "shell", vmName])
+        openKittyTab(title: "PAI Shell", args: ["limactl", "shell", vmName])
     }
 
     // MARK: - Session Management
 
     @objc private func newSession() {
-        // Open kitty window that shells into VM and runs PAI
-        openKittyWindow(title: "PAI", args: [
+        openKittyTab(title: "PAI", args: [
             "limactl", "shell", vmName,
             "bash", "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
         ])
     }
 
     @objc private func resumeSession() {
-        // Open kitty window with claude -r (interactive session picker)
-        openKittyWindow(title: "Resume Session", args: [
+        openKittyTab(title: "Resume Session", args: [
             "limactl", "shell", vmName,
             "bash", "-lc", "claude -r"
         ])
@@ -325,9 +323,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - kitty Helpers
 
-    private func openKittyWindow(title: String, args: [String]) {
+    private let kittySocket = "unix:/tmp/kitty"
+
+    private func openKittyTab(title: String, args: [String]) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+
+            // Try existing Kitty instance via remote control socket
+            if FileManager.default.fileExists(atPath: "/tmp/kitty") {
+                var remoteArgs = ["kitty", "@", "--to", self.kittySocket, "launch", "--type=tab", "--title", title, "--"]
+                remoteArgs.append(contentsOf: args)
+
+                let remoteTask = Process()
+                remoteTask.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                remoteTask.arguments = remoteArgs
+                remoteTask.environment = self.env
+                remoteTask.standardOutput = FileHandle.nullDevice
+                remoteTask.standardError = FileHandle.nullDevice
+
+                do {
+                    try remoteTask.run()
+                    remoteTask.waitUntilExit()
+                    if remoteTask.terminationStatus == 0 {
+                        // Bring Kitty to the front so user sees the new tab
+                        DispatchQueue.main.async {
+                            NSWorkspace.shared.runningApplications
+                                .first { $0.bundleIdentifier == "net.kovidgoyal.kitty" }?
+                                .activate()
+                        }
+                        return
+                    }
+                } catch { }
+            }
+
+            // No existing Kitty instance — open a new window
             var kittyArgs = ["--title", title]
             kittyArgs.append(contentsOf: args)
 

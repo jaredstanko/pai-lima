@@ -21,14 +21,26 @@ if [ "$VM_STATUS" != "Running" ]; then
   limactl start pai
 fi
 
+KITTY_SOCKET="unix:/tmp/kitty"
+
+# Try tab in existing Kitty, fall back to new window
+open_kitty_tab() {
+  local title="$1"
+  shift
+  if [ -S /tmp/kitty ] && kitty @ --to "$KITTY_SOCKET" launch --type=tab --title "$title" -- "$@" 2>/dev/null; then
+    return
+  fi
+  kitty --title "$title" "$@"
+}
+
 case "${1:-}" in
   --shell|-s)
-    kitty --title "PAI Shell" limactl shell pai
+    open_kitty_tab "PAI Shell" limactl shell pai
     ;;
   --resume|-r)
-    kitty --title "Resume Session" limactl shell pai bash -lc "claude -r"
+    open_kitty_tab "Resume Session" limactl shell pai bash -lc "claude -r"
     ;;
   *)
-    kitty --title "PAI" limactl shell pai bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
+    open_kitty_tab "PAI" limactl shell pai bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
