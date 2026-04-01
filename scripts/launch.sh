@@ -1,20 +1,30 @@
 #!/bin/bash
-# PAI Lima — spawn a new PAI session in kitty
+# PAI Lima — launch PAI in a kitty terminal
+# Opens a kitty window connected to the VM running PAI (Claude Code).
 #
 # Usage:
-#   ./session-host.sh              # New PAI session (Claude Code)
-#   ./session-host.sh --shell      # Open a plain shell in the VM
-#   ./session-host.sh --resume     # Resume a previous session (interactive picker)
+#   ./scripts/launch.sh              # Open PAI session
+#   ./scripts/launch.sh --resume     # Resume a previous Claude Code session
+#   ./scripts/launch.sh --shell      # Open a plain shell in the VM
+#
+# Prerequisites:
+#   - kitty installed (brew install --cask kitty)
+#   - Lima VM "pai" created and started (install.sh handles this)
 
 set -euo pipefail
 
 # Check prerequisites
 if ! command -v kitty &>/dev/null; then
-  echo "kitty not found. Install it: brew install --cask kitty"
+  echo "kitty not found. Run ./install.sh first, or: brew install --cask kitty"
   exit 1
 fi
 
-# Ensure VM is running
+if ! command -v limactl &>/dev/null; then
+  echo "Lima not found. Run ./install.sh first, or: brew install lima"
+  exit 1
+fi
+
+# Start the VM if it's not running
 VM_STATUS=$(limactl list --json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
 if [ "$VM_STATUS" != "Running" ]; then
   echo "Starting PAI VM..."
@@ -41,13 +51,19 @@ open_kitty_tab() {
 }
 
 case "${1:-}" in
-  --shell|-s)
-    open_kitty_tab "PAI Shell" limactl shell pai
-    ;;
   --resume|-r)
+    echo "Opening session picker..."
     open_kitty_tab "Resume Session" limactl shell pai bash -lc "claude -r"
     ;;
+  --shell|-s)
+    echo "Opening shell..."
+    open_kitty_tab "PAI Shell" limactl shell pai
+    ;;
   *)
+    echo "Launching PAI..."
     open_kitty_tab "PAI" limactl shell pai bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
+
+echo ""
+echo "Portal: http://localhost:8080"

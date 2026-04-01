@@ -17,7 +17,7 @@
 #   - Your work/ directory
 #
 # Usage:
-#   ./upgrade-host.sh
+#   ./scripts/upgrade.sh
 
 set -euo pipefail
 
@@ -87,7 +87,7 @@ step "Checking VM networking..."
 
 # Verify VM exists
 if ! limactl list --json 2>/dev/null | grep -q '"name":"pai"'; then
-  echo -e "        ${YELLOW}⚠${NC}  No VM named 'pai' found. Run ./setup-host.sh for a fresh install."
+  echo -e "        ${YELLOW}⚠${NC}  No VM named 'pai' found. Run ./install.sh for a fresh install."
   exit 1
 fi
 

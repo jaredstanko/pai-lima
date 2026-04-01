@@ -1,10 +1,10 @@
 #!/bin/bash
 # PAI Lima — Host Cleanup
-# Removes everything installed by setup-host.sh and upgrade-host.sh.
+# Removes everything installed by install.sh and scripts/upgrade.sh.
 # Asks before removing ~/pai-workspace/ (your data lives there).
 #
 # Usage:
-#   ./cleanup-host.sh
+#   ./scripts/uninstall.sh
 
 set -euo pipefail
 
@@ -184,5 +184,5 @@ if [ -d "$HOME/pai-workspace" ]; then
   echo "    • ~/pai-workspace/ (you chose to keep it)"
 fi
 echo ""
-echo "  To do a fresh install: ./setup-host.sh"
+echo "  To do a fresh install: ./install.sh"
 echo ""

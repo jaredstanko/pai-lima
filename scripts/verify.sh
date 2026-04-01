@@ -3,7 +3,7 @@
 # Checks that the full system matches the expected state from versions.env.
 # Uses 3-state model: PINNED (exact match), DRIFTED (acceptable), FAILED (blocking).
 #
-# Can be run standalone or called by setup-host.sh at the end of install.
+# Can be run standalone or called by install.sh at the end of install.
 #
 # Usage:
 #   ./verify.sh
@@ -270,7 +270,7 @@ echo ""
 
 if [ $FAIL -gt 0 ]; then
   echo -e "  ${RED}Some checks failed.${NC} Review output above for details."
-  echo -e "  Re-run ${BOLD}./setup-host.sh${NC} to fix, or check ${BOLD}~/.pai-install.log${NC}"
+  echo -e "  Re-run ${BOLD}./install.sh${NC} to fix, or check ${BOLD}~/.pai-install.log${NC}"
   exit 1
 elif [ $DRIFT -gt 0 ]; then
   echo -e "  ${YELLOW}Some versions drifted${NC} (likely Claude Code auto-update). Non-blocking."

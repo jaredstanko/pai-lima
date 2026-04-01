@@ -1,7 +1,7 @@
 #!/bin/bash
 # PAI Provisioning Script — Deterministic VM Setup
 # Run this INSIDE the Lima VM as the 'claude' user.
-# Called automatically by setup-host.sh on the Mac.
+# Called automatically by install.sh on the Mac.
 #
 # All versions are sourced from versions.env (single source of truth).
 # This script is idempotent — safe to re-run if interrupted.
@@ -52,7 +52,7 @@ retry() {
 VERSIONS_FILE="$HOME/versions.env"
 if [ ! -f "$VERSIONS_FILE" ]; then
   err "versions.env not found at $VERSIONS_FILE"
-  err "This file should be copied by setup-host.sh before running provision."
+  err "This file should be copied by install.sh before running provision."
   exit 1
 fi
 source "$VERSIONS_FILE"

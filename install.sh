@@ -7,8 +7,8 @@
 # This script is idempotent — safe to re-run if interrupted.
 #
 # Usage:
-#   ./setup-host.sh              # Normal install (progress phases)
-#   ./setup-host.sh --verbose    # Show full output from each step
+#   ./install.sh              # Normal install (progress phases)
+#   ./install.sh --verbose    # Show full output from each step
 #
 # Requirements:
 #   - macOS 13+ (Ventura or later)
@@ -251,7 +251,7 @@ echo "        This step takes 3-5 minutes on first run."
 
 # Copy versions.env and provision script to VM
 limactl cp "$SCRIPT_DIR/versions.env" pai:/home/claude/versions.env
-limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
+limactl cp "$SCRIPT_DIR/scripts/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
 if [ "$VERBOSE" = true ]; then
   limactl shell pai bash /home/claude/provision-vm.sh
@@ -303,18 +303,13 @@ ok "Portal URL: http://localhost:8080"
 step "Final verification..."
 
 # Run verify.sh if it exists
-if [ -f "$SCRIPT_DIR/verify.sh" ]; then
+if [ -f "$SCRIPT_DIR/scripts/verify.sh" ]; then
   echo ""
-  bash "$SCRIPT_DIR/verify.sh"
+  bash "$SCRIPT_DIR/scripts/verify.sh"
   echo ""
 fi
 
-echo "        To authenticate Claude Code, launch a workspace and follow the prompts:"
-echo "        ./launch-host.sh"
-echo ""
-echo "        Or authenticate directly:"
-echo "        limactl shell pai claude"
-ok "Claude Code ready — authenticate on first workspace launch"
+ok "Verification complete"
 
 # ─── Done ─────────────────────────────────────────────────────
 
@@ -323,18 +318,21 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo -e "${BOLD}${GREEN}  Setup complete!${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${GREEN}●${NC} PAI-Status is in your menu bar (top right)"
+echo -e "  ${GREEN}●${NC} Look for PAI-Status in your menu bar (top right)"
+echo ""
+echo "  Getting started:"
+echo "    1. Click the PAI icon in your menu bar"
+echo "    2. Click ${BOLD}New PAI Session${NC} to open a terminal"
+echo "    3. Run 'claude' and authenticate with your API key"
+echo "    4. Optional: click ${BOLD}Launch at Login${NC} so PAI-Status"
+echo "       starts automatically when you log in"
+echo ""
+echo "  From now on, PAI-Status is your control center:"
+echo -e "    ${BOLD}New PAI Session${NC}     Open a new AI workspace"
+echo -e "    ${BOLD}Resume Session${NC}      Pick up where you left off"
+echo -e "    ${BOLD}Start/Stop VM${NC}       Control the sandbox"
+echo -e "    ${BOLD}Open PAI Web${NC}        Open the web portal"
+echo ""
+echo -e "  Install log: $LOG_FILE"
 echo -e "  Shared files: ~/pai-workspace/"
-echo -e "  Install log:  $LOG_FILE"
-echo -e "  To open workspaces: ${BOLD}./launch-host.sh${NC}"
-echo ""
-echo "  Quick start:"
-echo "    1. Open a terminal: click PAI icon → Open a Terminal"
-echo "    2. Authenticate: run 'claude' and follow the prompts"
-echo "    3. Install PAI Companion — ask Claude:"
-echo ""
-echo -e "       ${CYAN}Install PAI Companion following ~/pai-companion/companion/INSTALL.md.${NC}"
-echo -e "       ${CYAN}Skip Docker (use Bun directly) and skip the voice module.${NC}"
-echo ""
-echo "    4. Start using PAI: run 'pai' or click New PAI Session"
 echo ""
