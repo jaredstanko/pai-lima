@@ -1,23 +1,34 @@
 #!/bin/bash
-# PAI Lima — Guided Host Installer for macOS
+# PAI Lima — Deterministic Host Installer for macOS
 # Single entry point: installs all prerequisites, creates the VM,
 # provisions it, builds the menu bar app, and sets up browser bookmarks.
 #
+# All dependency versions are pinned in versions.env (single source of truth).
+# This script is idempotent — safe to re-run if interrupted.
+#
 # Usage:
-#   ./setup-host.sh
+#   ./setup-host.sh              # Normal install (progress phases)
+#   ./setup-host.sh --verbose    # Show full output from each step
 #
 # Requirements:
 #   - macOS 13+ (Ventura or later)
 #   - Apple Silicon (M1/M2/M3/M4)
 #   - Internet connection (for downloads)
-#
-# This script is idempotent — safe to re-run if interrupted.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STEP=0
 TOTAL=10
+VERBOSE=false
+LOG_FILE="$HOME/.pai-install.log"
+
+# Parse flags
+for arg in "$@"; do
+  case "$arg" in
+    --verbose|-v) VERBOSE=true ;;
+  esac
+done
 
 # ─── Colors and helpers ───────────────────────────────────────
 
@@ -36,7 +47,43 @@ step() {
 
 ok()   { echo -e "        ${GREEN}✓${NC} $1"; }
 skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already done)"; }
-fail() { echo -e "        ${RED}✗${NC} $1"; exit 1; }
+fail() {
+  echo -e "        ${RED}✗${NC} $1"
+  if [ -n "${2:-}" ]; then
+    echo -e "        ${YELLOW}→${NC} $2"
+  fi
+  exit 1
+}
+
+# Retry helper for network operations
+retry() {
+  local max_attempts=3
+  local delay=5
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    if "$@" >> "$LOG_FILE" 2>&1; then
+      return 0
+    fi
+    if [ $attempt -lt $max_attempts ]; then
+      echo -e "        ${YELLOW}⊘${NC} Attempt $attempt/$max_attempts failed. Retrying in ${delay}s..."
+      sleep $delay
+      delay=$((delay * 2))
+    fi
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+# ─── Load version manifest ───────────────────────────────────
+
+VERSIONS_FILE="$SCRIPT_DIR/versions.env"
+if [ ! -f "$VERSIONS_FILE" ]; then
+  echo -e "${RED}✗${NC} versions.env not found in $SCRIPT_DIR"
+  echo -e "${YELLOW}→${NC} This file is required. Re-clone the repo or restore it."
+  exit 1
+fi
+source "$VERSIONS_FILE"
 
 # ─── Banner ───────────────────────────────────────────────────
 
@@ -48,6 +95,16 @@ echo ""
 echo "  This will set up a sandboxed AI workspace on your Mac."
 echo "  Estimated time: 5-10 minutes (first run)."
 echo ""
+echo "  Pinned versions (from versions.env):"
+echo "    Bun:         ${BUN_VERSION}"
+echo "    Claude Code: ${CLAUDE_CODE_VERSION}"
+echo "    Playwright:  ${PLAYWRIGHT_VERSION}"
+echo ""
+echo "  Log: $LOG_FILE"
+echo ""
+
+# Initialize log
+echo "=== PAI Lima Install $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" > "$LOG_FILE"
 
 # ─── Step 1: System requirements ──────────────────────────────
 
@@ -55,13 +112,13 @@ step "Checking system requirements..."
 
 # Check macOS
 if [[ "$(uname)" != "Darwin" ]]; then
-  fail "This script requires macOS."
+  fail "This script requires macOS." "Run this on a Mac with Apple Silicon."
 fi
 ok "macOS $(sw_vers -productVersion)"
 
 # Check Apple Silicon
 if [[ "$(uname -m)" != "arm64" ]]; then
-  fail "This script requires Apple Silicon (M1/M2/M3/M4)."
+  fail "This script requires Apple Silicon (M1/M2/M3/M4)." "Intel Macs are not supported."
 fi
 ok "Apple Silicon ($(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'arm64'))"
 
@@ -69,7 +126,7 @@ ok "Apple Silicon ($(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'arm
 if command -v brew &>/dev/null; then
   ok "Homebrew found"
 else
-  echo "  Homebrew not found. Installing..."
+  echo "        Homebrew not found. Installing..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   eval "$(/opt/homebrew/bin/brew shellenv)"
   ok "Homebrew installed"
@@ -79,9 +136,9 @@ fi
 if xcode-select -p &>/dev/null; then
   ok "Xcode Command Line Tools found"
 else
-  echo "  Installing Xcode Command Line Tools..."
+  echo "        Installing Xcode Command Line Tools..."
   xcode-select --install 2>/dev/null || true
-  echo "  → If a dialog appeared, click Install and re-run this script when done."
+  echo -e "        ${YELLOW}→${NC} If a dialog appeared, click Install and re-run this script when done."
   exit 0
 fi
 
@@ -90,16 +147,19 @@ fi
 step "Installing host tools..."
 
 if command -v limactl &>/dev/null; then
-  skip "Lima ($(limactl --version 2>/dev/null | head -1 || echo 'installed'))"
+  LIMA_VER=$(limactl --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "unknown")
+  skip "Lima ($LIMA_VER)"
 else
-  brew install lima
+  echo "        Installing Lima..."
+  retry brew install lima
   ok "Lima installed"
 fi
 
 if [ -d "/Applications/kitty.app" ] || command -v kitty &>/dev/null; then
   skip "kitty ($(kitty --version 2>/dev/null || echo 'installed'))"
 else
-  brew install --cask kitty
+  echo "        Installing kitty terminal..."
+  retry brew install --cask kitty
   ok "kitty installed"
 fi
 
@@ -107,7 +167,8 @@ fi
 if brew list --cask font-hack-nerd-font &>/dev/null 2>&1; then
   skip "Hack Nerd Font"
 else
-  brew install --cask font-hack-nerd-font
+  echo "        Installing Hack Nerd Font..."
+  retry brew install --cask font-hack-nerd-font
   ok "Hack Nerd Font installed"
 fi
 
@@ -148,27 +209,28 @@ else
   echo "        Creating VM from pai.yaml (this takes 3-5 minutes)..."
   limactl create --name=pai "$SCRIPT_DIR/pai.yaml"
   limactl start pai
-  ok "VM 'pai' created and started (4 CPU, 4 GB RAM, 40 GB disk)"
+  ok "VM 'pai' created and started (4 CPU, 4 GB RAM, 50 GB disk)"
 fi
 
 # ─── Step 5: Reboot VM and verify audio ──────────────────────
 
-step "Rebooting VM to load sound kernel modules..."
+step "Checking sound kernel modules..."
 
-echo "        Stopping VM..."
-limactl stop pai
-ok "VM stopped"
-
-echo "        Starting VM..."
-limactl start pai
-ok "VM restarted"
+# Only reboot if virtio_snd is not loaded (first run)
+if limactl shell pai lsmod 2>/dev/null | grep -q virtio_snd; then
+  skip "Sound modules already loaded"
+else
+  echo "        Rebooting VM to load sound kernel modules..."
+  limactl stop pai
+  ok "VM stopped"
+  limactl start pai
+  ok "VM restarted"
+fi
 
 # Wait for PulseAudio to come up
 sleep 3
 
 echo "        Playing test sound inside VM..."
-# Generate a 1-second 440Hz sine wave and play it through ALSA/PulseAudio
-# Run from /tmp to avoid Lima trying to cd into the host's cwd inside the VM
 limactl shell pai bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
 
 echo ""
@@ -179,7 +241,7 @@ if [[ "$HEARD_SOUND" =~ ^[Yy] ]]; then
   ok "Audio passthrough confirmed"
 else
   echo -e "        ${YELLOW}⊘${NC} Audio not heard — this is non-blocking, continuing setup."
-  echo "        You can troubleshoot later: limactl shell pai speaker-test -t sine -f 440 -l 1"
+  echo -e "        ${YELLOW}→${NC} Troubleshoot later: limactl shell pai speaker-test -t sine -f 440 -l 1"
 fi
 
 # ─── Step 6: Provision sandbox ────────────────────────────────
@@ -187,23 +249,25 @@ fi
 step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
-# Check if already provisioned (claude command exists in VM)
-if limactl shell pai command -v claude &>/dev/null 2>&1; then
-  skip "Claude Code already installed in VM"
-else
-  limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
+# Copy versions.env and provision script to VM
+limactl cp "$SCRIPT_DIR/versions.env" pai:/home/claude/versions.env
+limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
+
+if [ "$VERBOSE" = true ]; then
   limactl shell pai bash /home/claude/provision-vm.sh
-  ok "Sandbox provisioned"
+else
+  limactl shell pai bash /home/claude/provision-vm.sh 2>&1 | tee -a "$LOG_FILE"
 fi
+ok "Sandbox provisioned"
 
 # ─── Step 7: Configure terminal keybindings ───────────────────
 
 step "Verifying terminal configuration..."
 
 echo "        kitty keybinding configuration:"
-echo "          • Shift+Enter sends escape sequence for Claude Code multi-line input"
-echo "          • Remote control enabled for PAI-Status integration"
-echo "          • Config installed at ~/.config/kitty/kitty.conf"
+echo "          - Shift+Enter sends escape sequence for Claude Code multi-line input"
+echo "          - Remote control enabled for PAI-Status integration"
+echo "          - Config installed at ~/.config/kitty/kitty.conf"
 ok "kitty configured (see config/kitty.conf)"
 
 # ─── Step 8: Build and install menu bar app ───────────────────
@@ -213,7 +277,6 @@ step "Building PAI-Status menu bar app..."
 cd "$SCRIPT_DIR/menubar"
 
 if [ -d "/Applications/PAI-Status.app" ]; then
-  # Rebuild to pick up new features (Open Portal, etc.)
   echo "        Updating PAI-Status app..."
 fi
 
@@ -235,11 +298,17 @@ cp "$SCRIPT_DIR/config/portal.webloc" "$BOOKMARK_DEST"
 ok "Portal bookmark created on Desktop: PAI Portal.webloc"
 ok "Portal URL: http://localhost:8080"
 
-# ─── Step 10: Claude Code authentication ─────────────────────
+# ─── Step 10: Verification & Authentication ──────────────────
 
-step "Claude Code authentication..."
+step "Final verification..."
 
-echo ""
+# Run verify.sh if it exists
+if [ -f "$SCRIPT_DIR/verify.sh" ]; then
+  echo ""
+  bash "$SCRIPT_DIR/verify.sh"
+  echo ""
+fi
+
 echo "        To authenticate Claude Code, launch a workspace and follow the prompts:"
 echo "        ./launch-host.sh"
 echo ""
@@ -255,8 +324,9 @@ echo -e "${BOLD}${GREEN}  Setup complete!${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  ${GREEN}●${NC} PAI-Status is in your menu bar (top right)"
-echo -e "  📂 Shared files: ~/pai-workspace/"
-echo -e "  🖥️  To open workspaces: ${BOLD}./launch-host.sh${NC}"
+echo -e "  Shared files: ~/pai-workspace/"
+echo -e "  Install log:  $LOG_FILE"
+echo -e "  To open workspaces: ${BOLD}./launch-host.sh${NC}"
 echo ""
 echo "  Quick start:"
 echo "    1. Open a terminal: click PAI icon → Open a Terminal"

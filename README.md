@@ -40,18 +40,48 @@ cd pai-lima
 ./setup-host.sh
 ```
 
-The installer walks you through 10 steps:
+That's it. One command after cloning. The installer is **deterministic** — every dependency version is pinned in `versions.env`, so fresh installs on different machines converge to the same end state.
+
+### What the installer does (10 steps)
 
 1. Checks system requirements (macOS, Apple Silicon, Homebrew, Xcode CLI tools)
 2. Installs Lima, kitty, and Hack Nerd Font
 3. Creates `~/pai-workspace/` shared directories
-4. Creates and starts the Lima VM
+4. Creates and starts the Lima VM (Ubuntu 24.04, pinned image)
 5. Reboots VM and tests audio passthrough
-6. Provisions the VM (Claude Code, PAI, tools — takes 3-5 minutes on first run)
+6. Provisions the VM with pinned versions (Claude Code, PAI, Bun, Playwright, tools)
 7. Configures kitty terminal settings
 8. Builds and installs the PAI-Status menu bar app
 9. Creates a portal bookmark on your Desktop
-10. Provides authentication and PAI Companion install instructions
+10. Runs end-state verification and provides authentication instructions
+
+### Version Pinning
+
+All dependency versions are declared in `versions.env` — the single source of truth:
+
+```bash
+BUN_VERSION="1.3.11"
+CLAUDE_CODE_VERSION="2.1.89"
+PLAYWRIGHT_VERSION="1.50.0"
+# ... plus Ubuntu image URL, PAI repo commit, apt packages
+```
+
+To update versions, edit `versions.env` and re-run `./setup-host.sh`. Run `./verify.sh` to check system state at any time.
+
+### Verification
+
+After install (or anytime), run `./verify.sh` for a 3-state health check:
+
+- **PINNED** — version matches the manifest exactly
+- **DRIFTED** — installed but version differs (e.g., Claude Code auto-updated)
+- **FAILED** — component missing or broken
+
+### Options
+
+```bash
+./setup-host.sh              # Normal install (progress phases)
+./setup-host.sh --verbose    # Show full output from each step
+```
 
 ### After Setup: Install PAI Companion
 
@@ -210,12 +240,14 @@ limactl start pai
 
 ```
 pai-lima/
-├─ setup-host.sh            Guided installer (run first)
+├─ versions.env             Version manifest (single source of truth)
+├─ setup-host.sh            Deterministic installer (run first)
+├─ provision-vm.sh          VM-side provisioning (called by installer)
+├─ verify.sh                End-state verification (3-state health check)
 ├─ upgrade-host.sh          Safe upgrade for existing installs
 ├─ cleanup-host.sh          Remove everything (asks before data)
 ├─ vm-backup-restore.sh     Backup and restore Lima VM + workspace
-├─ provision-vm.sh          VM-side provisioning (called by installer)
-├─ pai.yaml                 Lima VM configuration
+├─ pai.yaml                 Lima VM configuration (pinned Ubuntu image)
 ├─ launch-host.sh           CLI: launch PAI session
 ├─ session-host.sh          CLI: launch/resume sessions
 ├─ config/

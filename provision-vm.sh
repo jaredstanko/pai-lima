@@ -1,21 +1,13 @@
 #!/bin/bash
-# PAI Provisioning Script
+# PAI Provisioning Script — Deterministic VM Setup
 # Run this INSIDE the Lima VM as the 'claude' user.
 # Called automatically by setup-host.sh on the Mac.
 #
+# All versions are sourced from versions.env (single source of truth).
+# This script is idempotent — safe to re-run if interrupted.
+#
 # Usage:
 #   bash ~/provision-vm.sh
-#
-# This script installs:
-#   1. System packages
-#   2. Bun (JavaScript runtime)
-#   3. Claude Code CLI
-#   4. PAI v4.0 (Personal AI Infrastructure)
-#   5. PAI Companion repo (cloned, not installed — Claude does that)
-#   6. Playwright (browser automation)
-#
-# After this script completes, authenticate Claude Code and ask it to
-# install PAI Companion: ~/pai-companion/companion/INSTALL.md
 
 set -euo pipefail
 
@@ -23,86 +15,147 @@ BOLD='\033[1m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-log()  { echo -e "${GREEN}[+]${NC} $1"; }
-warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-err()  { echo -e "${RED}[x]${NC} $1"; }
+LOG_FILE="$HOME/.provision.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+log()  { echo -e "  ${GREEN}✓${NC} $1"; }
+warn() { echo -e "  ${YELLOW}⊘${NC} $1"; }
+err()  { echo -e "  ${RED}✗${NC} $1"; }
+step() { echo -e "\n${CYAN}[$1]${NC} ${BOLD}$2${NC}"; }
+
+# ─── Retry helper ────────────────────────────────────────────
+retry() {
+  local max_attempts=3
+  local delay=5
+  local attempt=1
+  local cmd="$@"
+
+  while [ $attempt -le $max_attempts ]; do
+    if eval "$cmd"; then
+      return 0
+    fi
+    if [ $attempt -lt $max_attempts ]; then
+      warn "Attempt $attempt/$max_attempts failed. Retrying in ${delay}s..."
+      sleep $delay
+      delay=$((delay * 2))
+    fi
+    attempt=$((attempt + 1))
+  done
+  err "Failed after $max_attempts attempts: $cmd"
+  return 1
+}
+
+# ─── Load version manifest ──────────────────────────────────
+VERSIONS_FILE="$HOME/versions.env"
+if [ ! -f "$VERSIONS_FILE" ]; then
+  err "versions.env not found at $VERSIONS_FILE"
+  err "This file should be copied by setup-host.sh before running provision."
+  exit 1
+fi
+source "$VERSIONS_FILE"
 
 echo -e "${BOLD}"
 echo "============================================"
-echo "  PAI Provisioning"
+echo "  PAI Provisioning (Deterministic)"
 echo "============================================"
 echo -e "${NC}"
+echo "  Versions from manifest:"
+echo "    Bun:         ${BUN_VERSION}"
+echo "    Claude Code: ${CLAUDE_CODE_VERSION}"
+echo "    Playwright:  ${PLAYWRIGHT_VERSION}"
+echo ""
 
-# -----------------------------------------------------------
-# Step 1: System packages
-# -----------------------------------------------------------
-log "Installing system packages..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq \
-  jq fzf ripgrep fd-find sqlite3 tmux bat \
-  yt-dlp ffmpeg \
-  curl wget imagemagick \
-  nmap whois dnsutils net-tools traceroute mtr \
-  texlive-latex-base texlive-fonts-recommended pandoc \
-  golang-go python3 python3-pip python3-venv build-essential git \
-  zip tree nodejs npm kitty-terminfo
+# ─── Step 1: System packages ────────────────────────────────
+step "1/6" "Installing system packages..."
 
-# -----------------------------------------------------------
-# Step 2: Bun
-# -----------------------------------------------------------
+retry "sudo apt-get update -qq"
+# shellcheck disable=SC2086
+retry "sudo apt-get install -y -qq $APT_PACKAGES"
+log "System packages installed"
+
+# ─── Step 2: Bun ────────────────────────────────────────────
+step "2/6" "Installing Bun ${BUN_VERSION}..."
+
+CURRENT_BUN=""
 if command -v bun &>/dev/null; then
-  log "Bun already installed: $(bun --version)"
-else
-  log "Installing Bun..."
-  curl -fsSL https://bun.sh/install | bash
-  source ~/.bashrc
+  CURRENT_BUN=$(bun --version 2>/dev/null || echo "")
 fi
 
-# Make sure bun is on PATH for the rest of this script and future logins
+if [ "$CURRENT_BUN" = "$BUN_VERSION" ]; then
+  log "Bun already at pinned version ${BUN_VERSION}"
+else
+  if [ -n "$CURRENT_BUN" ]; then
+    warn "Bun ${CURRENT_BUN} installed, upgrading to ${BUN_VERSION}..."
+  fi
+  retry "curl -fsSL https://bun.sh/install | bash -s 'bun-v${BUN_VERSION}'"
+  source ~/.bashrc 2>/dev/null || true
+  log "Bun ${BUN_VERSION} installed"
+fi
+
+# Ensure bun is on PATH for the rest of this script
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-# -----------------------------------------------------------
-# Step 3: Claude Code
-# -----------------------------------------------------------
-# Detect if claude is installed via npm (old method) vs native installer
+# Verify
+INSTALLED_BUN=$(bun --version 2>/dev/null || echo "MISSING")
+if [ "$INSTALLED_BUN" != "$BUN_VERSION" ]; then
+  err "Bun version mismatch: expected ${BUN_VERSION}, got ${INSTALLED_BUN}"
+  exit 1
+fi
+
+# ─── Step 3: Claude Code ────────────────────────────────────
+step "3/6" "Installing Claude Code ${CLAUDE_CODE_VERSION}..."
+
+# Detect and remove old npm-based installs
 CLAUDE_NEEDS_INSTALL=false
 if command -v claude &>/dev/null; then
   CLAUDE_PATH=$(command -v claude)
   if [[ "$CLAUDE_PATH" == *"node_modules"* ]] || [[ "$CLAUDE_PATH" == *"npm"* ]] || [[ "$CLAUDE_PATH" == *"lib/node_modules"* ]]; then
-    warn "Claude Code is installed via npm (old method): $CLAUDE_PATH"
-    warn "Removing npm version and installing native..."
+    warn "Removing old npm-based Claude Code install: $CLAUDE_PATH"
     npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
     bun remove -g @anthropic-ai/claude-code 2>/dev/null || true
     CLAUDE_NEEDS_INSTALL=true
   else
-    log "Claude Code already installed (native): $(claude --version 2>/dev/null || echo 'installed')"
+    CURRENT_CLAUDE=$(claude --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "")
+    if [ "$CURRENT_CLAUDE" = "$CLAUDE_CODE_VERSION" ]; then
+      log "Claude Code already at pinned version ${CLAUDE_CODE_VERSION}"
+    else
+      warn "Claude Code ${CURRENT_CLAUDE} installed, upgrading to ${CLAUDE_CODE_VERSION}..."
+      CLAUDE_NEEDS_INSTALL=true
+    fi
   fi
 else
   CLAUDE_NEEDS_INSTALL=true
 fi
 
 if [ "$CLAUDE_NEEDS_INSTALL" = true ]; then
-  log "Installing Claude Code (native installer)..."
-  curl -fsSL https://claude.ai/install.sh | bash
+  retry "curl -fsSL https://claude.ai/install.sh | bash -s -- -y ${CLAUDE_CODE_VERSION}"
+  log "Claude Code ${CLAUDE_CODE_VERSION} installed"
 fi
 
-# Make sure claude is on PATH for the rest of this script
 export PATH="$HOME/.claude/bin:$PATH"
 
+# Verify (allow drift — Claude Code may auto-update)
+INSTALLED_CLAUDE=$(claude --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "MISSING")
+if [ "$INSTALLED_CLAUDE" = "$CLAUDE_CODE_VERSION" ]; then
+  log "Claude Code version verified: ${INSTALLED_CLAUDE}"
+elif [ "$INSTALLED_CLAUDE" != "MISSING" ]; then
+  warn "Claude Code drifted: expected ${CLAUDE_CODE_VERSION}, got ${INSTALLED_CLAUDE} (auto-update)"
+else
+  err "Claude Code not found after install"
+  exit 1
+fi
+
 echo ""
-warn "After this script finishes, run 'claude' to authenticate with your Anthropic API key."
+warn "After setup completes, run 'claude' to authenticate with your API key."
 echo ""
 
-# -----------------------------------------------------------
-# Step 3b: Shell environment (.bashrc)
-# -----------------------------------------------------------
-log "Ensuring .bashrc and .zshrc have correct PATH and settings..."
+# ─── Step 3b: Shell environment ─────────────────────────────
+step "3b" "Configuring shell environment..."
 
-# Build a block with all PATH entries and settings, guarded by a sentinel
-# so we can update it idempotently on re-runs.
 SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
 ENV_BLOCK='
 # --- PAI environment (managed by provision-vm.sh) ---
@@ -135,7 +188,6 @@ alias pai='\''bun $HOME/.claude/PAI/Tools/pai.ts'\''
 # --- end PAI environment ---
 '
 
-# Write to both .bashrc and .zshrc
 for rcfile in ~/.bashrc ~/.zshrc; do
   touch "$rcfile"
   if grep -qF "$SENTINEL" "$rcfile" 2>/dev/null; then
@@ -143,72 +195,72 @@ for rcfile in ~/.bashrc ~/.zshrc; do
   fi
   echo "$ENV_BLOCK" >> "$rcfile"
 done
-
 log "PAI environment block written to .bashrc and .zshrc"
 
-# Configure npm global prefix so `npm install -g` doesn't need sudo
+# Configure npm global prefix
 mkdir -p "$HOME/.npm-global"
 if ! npm config get prefix 2>/dev/null | grep -q '.npm-global'; then
   npm config set prefix "$HOME/.npm-global"
   log "npm global prefix set to ~/.npm-global"
 fi
 
-# Apply for the rest of this script
 export PATH="$HOME/.claude/bin:$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:$PATH"
 export TERM=xterm-kitty
 
-# -----------------------------------------------------------
-# Step 4: PAI v4.0
-# -----------------------------------------------------------
+# ─── Step 4: PAI ────────────────────────────────────────────
+step "4/6" "Installing PAI..."
+
 if [ -d "$HOME/.claude/PAI" ] || [ -d "$HOME/.claude/skills/PAI" ]; then
-  log "PAI appears to be already installed. Skipping."
+  log "PAI already installed. Skipping."
 else
-  log "Installing PAI v4.0..."
+  log "Cloning PAI repo..."
   cd /tmp
   rm -rf PAI
-  git clone https://github.com/danielmiessler/PAI.git
+  retry "git clone '${PAI_REPO}'"
   cd PAI
+
+  # Pin to specific commit if configured
+  if [ "$PAI_COMMIT" != "HEAD" ]; then
+    git checkout "$PAI_COMMIT"
+    log "Checked out PAI commit: ${PAI_COMMIT}"
+  fi
+
   LATEST_RELEASE=$(ls Releases/ | sort -V | tail -1)
   log "Using PAI release: $LATEST_RELEASE"
   cp -r "Releases/$LATEST_RELEASE/.claude/" ~/
   cd ~/.claude
 
-  # Fix installer for CLI mode (no GUI available in VM)
+  # Fix installer for CLI mode (no GUI in VM)
   if [ -f install.sh ]; then
     sed -i 's/--mode gui/--mode cli/' install.sh
     bash install.sh
   fi
 
-  # Fix shell config: PAI installer writes to .zshrc, we use bash
+  # Fix shell config paths
   if [ -f ~/.zshrc ]; then
     cat ~/.zshrc >> ~/.bashrc
-    # Fix PAI tool paths for the installed layout
     sed -i 's|skills/PAI/Tools/pai.ts|PAI/Tools/pai.ts|g' ~/.bashrc
   fi
 
   rm -rf /tmp/PAI
 
-  # Ensure PAI core skill is at the expected path for validation
+  # Ensure PAI skill symlink exists
   if [ -d "$HOME/.claude/PAI" ] && [ ! -d "$HOME/.claude/skills/PAI" ]; then
     mkdir -p "$HOME/.claude/skills"
     ln -sf "$HOME/.claude/PAI" "$HOME/.claude/skills/PAI"
-    log "Symlinked ~/.claude/PAI → ~/.claude/skills/PAI"
+    log "Symlinked ~/.claude/PAI -> ~/.claude/skills/PAI"
   fi
 
-  log "PAI installed."
+  log "PAI installed"
 fi
 
 source ~/.bashrc 2>/dev/null || true
 
-# -----------------------------------------------------------
-# Step 4b: Detect VM IP and write .env
-# -----------------------------------------------------------
-# Use localhost since Lima port-forwards guest ports to the host
+# ─── Step 4b: VM IP and .env ────────────────────────────────
 VM_IP="localhost"
 echo "$VM_IP" > ~/.vm-ip
 log "VM IP: $VM_IP (Lima port-forwards to host)"
 
-# Write .env to ~/.claude (Lima mount from host ~/pai-workspace/claude-home)
 if [ -d "$HOME/.claude" ] && touch "$HOME/.claude/.env-test" 2>/dev/null; then
   rm -f "$HOME/.claude/.env-test"
   if [ -f ~/.claude/.env ]; then
@@ -221,91 +273,74 @@ ENVEOF
   log "VM_IP and PORTAL_PORT written to ~/.claude/.env"
 else
   warn "~/.claude mount not writable — skipping .env write"
-  warn "Ensure ~/pai-workspace/claude-home exists on the host"
 fi
 
-# -----------------------------------------------------------
-# Step 5: Clone PAI Companion (for Claude to install later)
-# -----------------------------------------------------------
-log "Cloning PAI Companion repo..."
-cd /tmp
-rm -rf pai-companion
-if git clone https://github.com/chriscantey/pai-companion.git 2>/dev/null; then
-  rm -rf "$HOME/pai-companion"
-  cp -r /tmp/pai-companion "$HOME/pai-companion"
-  rm -rf /tmp/pai-companion
-  log "PAI Companion cloned to ~/pai-companion"
+# ─── Step 5: PAI Companion ──────────────────────────────────
+step "5/6" "Cloning PAI Companion..."
+
+if [ -d "$HOME/pai-companion/companion" ]; then
+  log "PAI Companion already cloned"
 else
-  warn "Failed to clone pai-companion — you can clone it manually later."
+  cd /tmp
+  rm -rf pai-companion
+  if retry "git clone '${PAI_COMPANION_REPO}'"; then
+    # Pin to specific commit if configured
+    if [ "$PAI_COMPANION_COMMIT" != "HEAD" ]; then
+      cd pai-companion
+      git checkout "$PAI_COMPANION_COMMIT"
+      cd /tmp
+      log "Checked out PAI Companion commit: ${PAI_COMPANION_COMMIT}"
+    fi
+    rm -rf "$HOME/pai-companion"
+    cp -r /tmp/pai-companion "$HOME/pai-companion"
+    rm -rf /tmp/pai-companion
+    log "PAI Companion cloned to ~/pai-companion"
+  else
+    warn "Failed to clone pai-companion — you can clone it manually later."
+  fi
 fi
 
-# -----------------------------------------------------------
-# Step 6: Playwright (optional but recommended)
-# -----------------------------------------------------------
-log "Installing Playwright..."
+# ─── Step 6: Playwright ─────────────────────────────────────
+step "6/6" "Installing Playwright ${PLAYWRIGHT_VERSION}..."
+
 if command -v bun &>/dev/null; then
   cd /tmp
   mkdir -p playwright-setup && cd playwright-setup
   bun init -y 2>/dev/null || true
-  bun add playwright 2>/dev/null || true
-  bunx playwright install --with-deps chromium 2>/dev/null || warn "Playwright install may need manual completion."
+  bun add "playwright@${PLAYWRIGHT_VERSION}" 2>/dev/null || true
+  retry "bunx playwright install --with-deps chromium" || warn "Playwright install may need manual completion."
   cd /tmp && rm -rf playwright-setup
+  log "Playwright ${PLAYWRIGHT_VERSION} installed"
 else
   warn "Bun not found. Skipping Playwright."
 fi
 
-# ===================================================================
-# Verification
-# ===================================================================
+# ═══════════════════════════════════════════════════════════════
+# Quick sanity check (full verification is done by verify.sh from host)
+# ═══════════════════════════════════════════════════════════════
 echo ""
-echo -e "${BOLD}============================================${NC}"
-echo -e "${BOLD}  Verifying Installation${NC}"
-echo -e "${BOLD}============================================${NC}"
-echo ""
+echo -e "${BOLD}  Quick sanity check...${NC}"
 
-PASS=0
 FAIL=0
-
-check() {
-  local label="$1"
-  local result="$2"
-  if [ "$result" = "PASS" ]; then
-    echo -e "  ${GREEN}✓${NC} $label"
-    PASS=$((PASS + 1))
-  else
-    echo -e "  ${RED}✗${NC} $label"
+for check_cmd in \
+  "command -v bun" \
+  "command -v claude" \
+  "test -d $HOME/.claude/PAI" \
+  "grep -qF '# --- PAI environment' ~/.bashrc" \
+  "test -s $HOME/.vm-ip"; do
+  if ! eval "$check_cmd" &>/dev/null; then
+    err "Sanity check failed: $check_cmd"
     FAIL=$((FAIL + 1))
   fi
-}
+done
 
-# Core tools
-command -v bun &>/dev/null && check "Bun installed" "PASS" || check "Bun installed" "FAIL"
-command -v claude &>/dev/null && check "Claude Code installed" "PASS" || check "Claude Code installed" "FAIL"
+if [ $FAIL -gt 0 ]; then
+  err "Provisioning completed with $FAIL failures. Check output above."
+  exit 1
+fi
+log "All sanity checks passed"
 
-# PAI
-(test -d "$HOME/.claude/PAI" || test -d "$HOME/.claude/skills/PAI") \
-  && check "PAI installed" "PASS" || check "PAI installed" "FAIL"
-
-# Shell environment
-grep -qF "# --- PAI environment (managed by provision-vm.sh) ---" ~/.bashrc 2>/dev/null \
-  && check ".bashrc PAI environment block" "PASS" || check ".bashrc PAI environment block" "FAIL"
-
-grep -qF "# --- PAI environment (managed by provision-vm.sh) ---" ~/.zshrc 2>/dev/null \
-  && check ".zshrc PAI environment block" "PASS" || check ".zshrc PAI environment block" "FAIL"
-
-# VM IP
-test -s ~/.vm-ip && check "VM IP configured ($(cat ~/.vm-ip))" "PASS" || check "VM IP configured" "FAIL"
-
-# Companion repo
-test -d "$HOME/pai-companion/companion" \
-  && check "PAI Companion repo cloned" "PASS" || check "PAI Companion repo cloned" "FAIL"
-
-echo ""
-echo -e "  Results: ${GREEN}${PASS} passed${NC}, ${RED}${FAIL} failed${NC}"
-
-# -----------------------------------------------------------
-# Done
-# -----------------------------------------------------------
+# ─── Done ────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${GREEN}============================================${NC}"
 echo -e "${BOLD}${GREEN}  Provisioning Complete${NC}"
@@ -313,6 +348,7 @@ echo -e "${BOLD}${GREEN}============================================${NC}"
 echo ""
 log "PAI:          ~/.claude/"
 log "Companion:    ~/pai-companion/ (ready for Claude to install)"
+log "Log:          $LOG_FILE"
 echo ""
 warn "Next steps:"
 warn "  1. Run 'claude' to authenticate with your Anthropic API key"
