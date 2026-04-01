@@ -31,13 +31,20 @@ if [ "$VM_STATUS" != "Running" ]; then
   limactl start pai
 fi
 
-KITTY_SOCKET="unix:/tmp/kitty"
+# Find kitty socket (kitty appends -<PID> to listen_on path)
+find_kitty_socket() {
+  for sock in /tmp/kitty-*; do
+    [ -S "$sock" ] && echo "unix:$sock" && return 0
+  done
+  return 1
+}
 
 # Try tab in existing Kitty, fall back to new window
 open_kitty_tab() {
   local title="$1"
   shift
-  if [ -S /tmp/kitty ] && kitty @ --to "$KITTY_SOCKET" launch --type=tab --title "$title" -- "$@" 2>/dev/null; then
+  local socket
+  if socket=$(find_kitty_socket) && timeout 5 kitty @ --to "$socket" launch --type=tab --title "$title" -- "$@" 2>/dev/null; then
     return
   fi
   kitty --title "$title" "$@"

@@ -323,15 +323,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - kitty Helpers
 
-    private let kittySocket = "unix:/tmp/kitty"
+    /// Find the kitty remote control socket.
+    /// kitty appends -<PID> to listen_on paths, so we glob /tmp/kitty-*.
+    private func findKittySocket() -> String? {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(atPath: "/tmp") else { return nil }
+        // Find socket files matching kitty-<PID> pattern
+        for entry in entries where entry.hasPrefix("kitty-") {
+            let path = "/tmp/\(entry)"
+            var statBuf = stat()
+            guard stat(path, &statBuf) == 0, (statBuf.st_mode & S_IFMT) == S_IFSOCK else { continue }
+            return "unix:\(path)"
+        }
+        return nil
+    }
 
     private func openKittyTab(title: String, args: [String]) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
             // Try existing Kitty instance via remote control socket
-            if FileManager.default.fileExists(atPath: "/tmp/kitty") {
-                var remoteArgs = ["kitty", "@", "--to", self.kittySocket, "launch", "--type=tab", "--title", title, "--"]
+            if let socketAddr = self.findKittySocket() {
+                var remoteArgs = ["kitty", "@", "--to", socketAddr, "launch", "--type=tab", "--title", title, "--"]
                 remoteArgs.append(contentsOf: args)
 
                 let remoteTask = Process()
@@ -343,6 +356,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 do {
                     try remoteTask.run()
+                    // Timeout: kill after 5s to handle stale sockets
+                    let deadline = DispatchTime.now() + 5
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: deadline) {
+                        if remoteTask.isRunning { remoteTask.terminate() }
+                    }
                     remoteTask.waitUntilExit()
                     if remoteTask.terminationStatus == 0 {
                         // Bring Kitty to the front so user sees the new tab
