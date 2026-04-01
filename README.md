@@ -7,7 +7,8 @@ A sandboxed AI workspace running Claude Code in an isolated VM on your Mac. One 
 - **Sandboxed AI** — Claude Code runs inside an isolated VM, not on your Mac
 - **Menu bar control** — Start sessions, stop the VM, open the web portal — all from one icon
 - **Session resume** — Pick up previous conversations where you left off
-- **Shared folders** — Drop files in `~/pai-workspace/` and the AI can access them
+- **Web Portal** - Hosted locally (in the VM) for information review and exchange
+- **Shared folders** — `~/pai-workspace/` contains folders that the AI uses to store and manage information. It is shared with the host.
 - **Audio** — The AI can speak through your Mac speakers
 
 ## Requirements
