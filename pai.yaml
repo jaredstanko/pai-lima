@@ -10,7 +10,7 @@ vmType: vz
 images:
   # Pinned to date-stamped release (not floating "release" symlink).
   # Update URL and SHA256 in versions.env when upgrading.
-  - location: "https://cloud-images.ubuntu.com/releases/24.04/release-20250306/ubuntu-24.04-server-cloudimg-arm64.img"
+  - location: "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-arm64.img"
     arch: "aarch64"
 
 user:
