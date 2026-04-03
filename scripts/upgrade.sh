@@ -29,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 STEP=0
-TOTAL=7
+TOTAL=6
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -228,14 +228,6 @@ open "/Applications/${APP_BUNDLE}" 2>/dev/null || true
 ok "${APP_NAME} running"
 cd "$SCRIPT_DIR"
 
-# ─── Step 7: Update portal bookmark ──────────────────────────
-
-step "Updating portal bookmark..."
-
-BOOKMARK_DEST=$(pai_bookmark_path)
-pai_generate_webloc "$BOOKMARK_DEST"
-ok "Portal bookmark updated (http://localhost:${PORTAL_PORT})"
-
 # ─── Done ─────────────────────────────────────────────────────
 
 echo ""
@@ -254,5 +246,5 @@ echo "    • Host tools (Lima, kitty)"
 echo "    • ${APP_NAME} menu bar app"
 echo "    • VM networking (vzNAT → localhost:${PORTAL_PORT})"
 echo "    • VM system packages and aliases"
-echo "    • Portal bookmark"
+echo "    • Portal URL: http://localhost:${PORTAL_PORT}"
 echo ""

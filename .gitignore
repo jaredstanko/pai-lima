@@ -1,3 +1,4 @@
 menubar/build/
 .pai-*.yaml
 .DS_Store
+pai-install-*.log

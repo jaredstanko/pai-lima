@@ -29,8 +29,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/common.sh
 source "$SCRIPT_DIR/scripts/common.sh" "$@" --needs-port
 
+# Override log file: write to script directory with ISO 8601 timestamp
+LOG_FILE="$SCRIPT_DIR/pai-install-$(date +%Y%m%dT%H%M%S).log"
+
 STEP=0
-TOTAL=8
+TOTAL=7
 VERBOSE=false
 
 # Parse additional flags (--name and --port already consumed by common.sh)
@@ -269,16 +272,7 @@ ok "${APP_NAME} running in menu bar"
 
 cd "$SCRIPT_DIR"
 
-# ─── Step 7: Set up browser bookmark ─────────────────────────
-
-step "Setting up browser bookmarks..."
-
-BOOKMARK_DEST=$(pai_bookmark_path)
-pai_generate_webloc "$BOOKMARK_DEST"
-ok "Portal bookmark created on Desktop: $(basename "$BOOKMARK_DEST")"
-ok "Portal URL: http://localhost:${PORTAL_PORT}"
-
-# ─── Step 8: Verification ────────────────────────────────────
+# ─── Step 7: Verification ────────────────────────────────────
 
 step "Final verification..."
 
