@@ -135,7 +135,7 @@ do_backup() {
 
   local was_running=false
   local status
-  status=$(limactl list --format '{{.Name}} {{.Status}}' 2>/dev/null | awk -v vm="$vm_name" '$1 == vm {print $2}')
+  status=$(limactl list --format '{{.Name}} {{.Status}}' 2>/dev/null | awk -v vm="$vm_name" '$1 == vm {print $2}' || true)
 
   if [[ "$status" == "Running" ]]; then
     echo "→ VM '$vm_name' is running. Stopping it for a clean backup..."
@@ -190,7 +190,7 @@ do_restore() {
 
   # Stop the VM if running
   local status
-  status=$(limactl list --format '{{.Name}} {{.Status}}' 2>/dev/null | awk -v vm="$vm_name" '$1 == vm {print $2}')
+  status=$(limactl list --format '{{.Name}} {{.Status}}' 2>/dev/null | awk -v vm="$vm_name" '$1 == vm {print $2}' || true)
   if [[ "$status" == "Running" ]]; then
     echo "→ Stopping VM '$vm_name' before restore..."
     limactl stop "$vm_name"

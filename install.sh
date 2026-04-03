@@ -202,7 +202,9 @@ sed \
 
 # If using a non-default port, add hostPort to the port forwarding
 if [ "$PORTAL_PORT" != "8080" ]; then
-  sed -i '' -e "s|guestPort: 8080|guestPort: 8080\n    hostPort: ${PORTAL_PORT}|g" "$GENERATED_YAML"
+  # macOS sed doesn't support \n in replacement — use literal newline
+  sed -i '' -e "s|guestPort: 8080|guestPort: 8080\\
+    hostPort: ${PORTAL_PORT}|g" "$GENERATED_YAML"
 fi
 
 VM_STATUS=$(pai_vm_status)
