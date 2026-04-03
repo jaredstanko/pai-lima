@@ -247,7 +247,7 @@ do_restore() {
 # Extract subcommand from remaining args (--name already consumed by common.sh)
 SUBCOMMAND=""
 POSITIONAL_VM=""
-for arg in "${_PAI_REMAINING_ARGS[@]}"; do
+for arg in ${_PAI_REMAINING_ARGS[@]+"${_PAI_REMAINING_ARGS[@]}"}; do
   case "$arg" in
     backup|restore) SUBCOMMAND="$arg" ;;
     -*) ;; # skip other flags

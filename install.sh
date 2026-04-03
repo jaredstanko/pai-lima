@@ -30,7 +30,7 @@ TOTAL=10
 VERBOSE=false
 
 # Parse additional flags (--name and --port already consumed by common.sh)
-for arg in "${_PAI_REMAINING_ARGS[@]}"; do
+for arg in ${_PAI_REMAINING_ARGS[@]+"${_PAI_REMAINING_ARGS[@]}"}; do
   case "$arg" in
     --verbose|-v) VERBOSE=true ;;
     *) ;;
