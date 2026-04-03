@@ -365,7 +365,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Try existing Kitty instance via remote control socket
             if let socketAddr = self.findKittySocket() {
-                var remoteArgs = ["kitty", "@", "--to", socketAddr, "launch", "--type=tab", "--title", title, "--"]
+                var remoteArgs = ["kitty", "@", "--to", socketAddr, "launch", "--type=tab", "--title", title, "--cwd", NSHomeDirectory(), "--"]
                 remoteArgs.append(contentsOf: args)
 
                 let remoteTask = Process()
@@ -396,7 +396,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             // No existing Kitty instance — open a new window
-            var kittyArgs = ["--title", title]
+            var kittyArgs = ["--directory", NSHomeDirectory(), "--title", title]
             kittyArgs.append(contentsOf: args)
 
             let task = Process()
