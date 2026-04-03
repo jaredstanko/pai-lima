@@ -51,18 +51,22 @@ done
 
 TITLE_PREFIX="${INSTANCE_NAME}"
 
+# Detect the VM user's default shell
+USER_SHELL=$(limactl shell "$VM_NAME" -- getent passwd claude 2>/dev/null | cut -d: -f7 || true)
+USER_SHELL="${USER_SHELL:-/bin/bash}"
+
 case "$ACTION" in
   resume)
     echo "Opening session picker..."
-    pai_open_kitty_tab "${TITLE_PREFIX}: Resume" limactl shell "$VM_NAME" bash -lc "claude -r"
+    pai_open_kitty_tab "${TITLE_PREFIX}: Resume" limactl shell "$VM_NAME" -- "$USER_SHELL" -lc "claude -r"
     ;;
   shell)
     echo "Opening shell..."
-    pai_open_kitty_tab "${TITLE_PREFIX}: Shell" limactl shell "$VM_NAME"
+    pai_open_kitty_tab "${TITLE_PREFIX}: Shell" limactl shell "$VM_NAME" -- "$USER_SHELL" -l
     ;;
   *)
     echo "Launching PAI..."
-    pai_open_kitty_tab "${TITLE_PREFIX}" limactl shell "$VM_NAME" bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
+    pai_open_kitty_tab "${TITLE_PREFIX}" limactl shell "$VM_NAME" -- "$USER_SHELL" -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
 

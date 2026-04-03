@@ -43,6 +43,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var newSessionMenuItem: NSMenuItem!
     private var timer: Timer?
     private var vmState: VMState = .unknown
+    private var cachedUserShell: String?
 
     // Constants
     private let vmName = "pai"
@@ -302,23 +303,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTerminal() {
-        openKittyTab(title: "PAI Shell", args: ["limactl", "shell", vmName])
+        let shell = getUserShell()
+        openKittyTab(title: "PAI Shell", args: [
+            "limactl", "shell", vmName, "--", shell, "-l"
+        ])
     }
 
     // MARK: - Session Management
 
     @objc private func newSession() {
+        let shell = getUserShell()
         openKittyTab(title: "PAI", args: [
-            "limactl", "shell", vmName,
-            "bash", "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
+            "limactl", "shell", vmName, "--", shell, "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
         ])
     }
 
     @objc private func resumeSession() {
+        let shell = getUserShell()
         openKittyTab(title: "Resume Session", args: [
-            "limactl", "shell", vmName,
-            "bash", "-lc", "claude -r"
+            "limactl", "shell", vmName, "--", shell, "-lc", "claude -r"
         ])
+    }
+
+    // MARK: - User Shell Detection
+
+    /// Query the VM user's default shell, cached after first call.
+    private func getUserShell() -> String {
+        if let cached = cachedUserShell { return cached }
+        let (exitCode, output) = runProcess("/usr/bin/env", args: [
+            "limactl", "shell", vmName, "--", "getent", "passwd", "claude"
+        ], timeout: 10)
+        // getent passwd claude returns: claude:x:1000:1000::/home/claude:/bin/bash
+        if exitCode == 0, let output = output {
+            let shell = output.components(separatedBy: ":").last ?? "/bin/bash"
+            cachedUserShell = shell
+            return shell
+        }
+        return "/bin/bash"
     }
 
     // MARK: - kitty Helpers
