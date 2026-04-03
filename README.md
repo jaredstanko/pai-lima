@@ -48,7 +48,10 @@ Install PAI Companion following ~/pai-companion/companion/INSTALL.md.
 Skip Docker (use Bun directly for the portal) and skip the voice
 module. Keep ~/.vm-ip set to localhost and VM_IP=localhost in .env.
 After installation, verify the portal is running at localhost:8080
-and verify the voice server is working. Set both to start on boot.
+and verify the voice server can successfully generate and play audio
+end-to-end (not just that the process is listening). Fix any
+macOS-specific binaries (like afplay) that won't work on Linux.
+Set both to start on boot.
 ```
 
 Claude Code will ask: **"Do you want to create PRD.md?"** -- press **2** (Yes) to allow it to edit settings for this session.
