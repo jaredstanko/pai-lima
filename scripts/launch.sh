@@ -58,15 +58,15 @@ USER_SHELL="${USER_SHELL:-/bin/bash}"
 case "$ACTION" in
   resume)
     echo "Opening session picker..."
-    pai_open_kitty_tab "${TITLE_PREFIX}: Resume" limactl shell "$VM_NAME" -- "$USER_SHELL" -lc "claude -r"
+    pai_open_kitty_tab "${TITLE_PREFIX}: Resume" limactl shell --workdir /home/claude "$VM_NAME" -- "$USER_SHELL" -lc "claude -r"
     ;;
   shell)
     echo "Opening shell..."
-    pai_open_kitty_tab "${TITLE_PREFIX}: Shell" limactl shell "$VM_NAME" -- "$USER_SHELL" -l
+    pai_open_kitty_tab "${TITLE_PREFIX}: Shell" limactl shell --workdir /home/claude "$VM_NAME" -- "$USER_SHELL" -l
     ;;
   *)
     echo "Launching PAI..."
-    pai_open_kitty_tab "${TITLE_PREFIX}" limactl shell "$VM_NAME" -- "$USER_SHELL" -lc "bun ~/.claude/PAI/Tools/pai.ts"
+    pai_open_kitty_tab "${TITLE_PREFIX}" limactl shell --workdir /home/claude "$VM_NAME" -- "$USER_SHELL" -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
 

@@ -305,7 +305,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openTerminal() {
         let shell = getUserShell()
         openKittyTab(title: "PAI Shell", args: [
-            "limactl", "shell", vmName, "--", shell, "-l"
+            "limactl", "shell", "--workdir", "/home/claude", vmName, "--", shell, "-l"
         ])
     }
 
@@ -314,14 +314,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func newSession() {
         let shell = getUserShell()
         openKittyTab(title: "PAI", args: [
-            "limactl", "shell", vmName, "--", shell, "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
+            "limactl", "shell", "--workdir", "/home/claude", vmName, "--", shell, "-lc", "bun ~/.claude/PAI/Tools/pai.ts"
         ])
     }
 
     @objc private func resumeSession() {
         let shell = getUserShell()
         openKittyTab(title: "Resume Session", args: [
-            "limactl", "shell", vmName, "--", shell, "-lc", "claude -r"
+            "limactl", "shell", "--workdir", "/home/claude", vmName, "--", shell, "-lc", "claude -r"
         ])
     }
 
