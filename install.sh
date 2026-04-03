@@ -7,8 +7,10 @@
 # This script is idempotent — safe to re-run if interrupted.
 #
 # Usage:
-#   ./install.sh              # Normal install (progress phases)
-#   ./install.sh --verbose    # Show full output from each step
+#   ./install.sh                        # Normal install (default "pai" instance)
+#   ./install.sh --verbose              # Show full output from each step
+#   ./install.sh --name=v2              # Parallel install as "pai-v2"
+#   ./install.sh --name=v2 --port=8082  # Parallel install with specific portal port
 #
 # Requirements:
 #   - macOS 13+ (Ventura or later)
@@ -18,13 +20,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared instance configuration (sets VM_NAME, WORKSPACE, PORTAL_PORT, etc.)
+# shellcheck source=scripts/common.sh
+source "$SCRIPT_DIR/scripts/common.sh" "$@" --needs-port
+
 STEP=0
 TOTAL=10
 VERBOSE=false
-LOG_FILE="$HOME/.pai-install.log"
 
-# Parse flags
-for arg in "$@"; do
+# Parse additional flags (--name and --port already consumed by common.sh)
+for arg in "${_PAI_REMAINING_ARGS[@]}"; do
   case "$arg" in
     --verbose|-v) VERBOSE=true ;;
     *) ;;
@@ -81,16 +87,22 @@ retry() {
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  Sandbox My AI — PAI Lima Installer${NC}"
+if [ -n "$INSTANCE_SUFFIX" ]; then
+  echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
+fi
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo ""
 echo "  This will set up a sandboxed AI workspace on your Mac."
 echo "  Estimated time: 5-10 minutes (first run)."
 echo ""
-echo "  Log: $LOG_FILE"
+echo "  VM name:     $VM_NAME"
+echo "  Workspace:   $WORKSPACE"
+echo "  Portal port: $PORTAL_PORT"
+echo "  Log:         $LOG_FILE"
 echo ""
 
 # Initialize log
-echo "=== PAI Lima Install $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" > "$LOG_FILE"
+echo "=== PAI Lima Install ($INSTANCE_NAME) $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" > "$LOG_FILE"
 
 # ─── Step 1: System requirements ──────────────────────────────
 
@@ -167,49 +179,65 @@ ok "kitty.conf installed to ~/.config/kitty/"
 
 step "Creating shared workspace directories..."
 
-WORKSPACE="$HOME/pai-workspace"
 DIRS=(claude-home data exchange portal work upstream)
 
 for dir in "${DIRS[@]}"; do
   mkdir -p "$WORKSPACE/$dir"
 done
-ok "~/pai-workspace/ with ${#DIRS[@]} subdirectories"
+ok "$WORKSPACE/ with ${#DIRS[@]} subdirectories"
 
 # ─── Step 4: Create and start sandbox VM ──────────────────────
 
 step "Creating sandbox VM..."
 
-VM_JSON=$(limactl list --json 2>/dev/null || echo "")
+# Generate instance-specific pai.yaml from template
+GENERATED_YAML="$SCRIPT_DIR/.pai-${INSTANCE_NAME}.yaml"
+# Workspace path needs ~ prefix for Lima yaml (not expanded $HOME)
+WORKSPACE_TILDE="${WORKSPACE/#$HOME/~}"
+sed \
+  -e "s|~/pai-workspace/|${WORKSPACE_TILDE}/|g" \
+  -e "s|set-hostname pai|set-hostname ${INSTANCE_NAME}|g" \
+  -e "s|lima-pai|${INSTANCE_NAME}|g" \
+  "$SCRIPT_DIR/pai.yaml" > "$GENERATED_YAML"
 
-if echo "$VM_JSON" | grep -q '"name":"pai"'; then
-  skip "VM 'pai' already exists"
-  VM_STATUS=$(echo "$VM_JSON" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+# If using a non-default port, add hostPort to the port forwarding
+if [ "$PORTAL_PORT" != "8080" ]; then
+  sed -i '' -e "s|guestPort: 8080|guestPort: 8080\n    hostPort: ${PORTAL_PORT}|g" "$GENERATED_YAML"
+fi
+
+VM_STATUS=$(pai_vm_status)
+
+if [ -n "$VM_STATUS" ]; then
+  skip "VM '$VM_NAME' already exists"
   if [ "$VM_STATUS" != "Running" ]; then
     echo "        Starting VM..."
-    limactl start pai
+    limactl start "$VM_NAME"
     ok "VM started"
   else
     skip "VM already running"
   fi
 else
   echo "        Creating VM from pai.yaml (this takes 3-5 minutes)..."
-  limactl create --name=pai "$SCRIPT_DIR/pai.yaml"
-  limactl start pai
-  ok "VM 'pai' created and started (4 CPU, 4 GB RAM, 50 GB disk)"
+  limactl create --name="$VM_NAME" "$GENERATED_YAML"
+  limactl start "$VM_NAME"
+  ok "VM '$VM_NAME' created and started (4 CPU, 4 GB RAM, 50 GB disk)"
 fi
+
+# Clean up generated yaml
+rm -f "$GENERATED_YAML"
 
 # ─── Step 5: Reboot VM and verify audio ──────────────────────
 
 step "Checking sound kernel modules..."
 
 # Only reboot if virtio_snd is not loaded (first run)
-if limactl shell pai lsmod 2>/dev/null | grep -q virtio_snd; then
+if limactl shell "$VM_NAME" lsmod 2>/dev/null | grep -q virtio_snd; then
   skip "Sound modules already loaded"
 else
   echo "        Rebooting VM to load sound kernel modules..."
-  limactl stop pai
+  limactl stop "$VM_NAME"
   ok "VM stopped"
-  limactl start pai
+  limactl start "$VM_NAME"
   ok "VM restarted"
 fi
 
@@ -217,7 +245,7 @@ fi
 sleep 3
 
 echo "        Playing test sound inside VM..."
-limactl shell pai bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
+limactl shell "$VM_NAME" bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
 
 echo ""
 echo -e "        ${YELLOW}▸ Did you hear a tone from your Mac speakers? [y/N]${NC}"
@@ -227,7 +255,7 @@ if [[ "$HEARD_SOUND" =~ ^[Yy] ]]; then
   ok "Audio passthrough confirmed"
 else
   echo -e "        ${YELLOW}⊘${NC} Audio not heard — this is non-blocking, continuing setup."
-  echo -e "        ${YELLOW}→${NC} Troubleshoot later: limactl shell pai speaker-test -t sine -f 440 -l 1"
+  echo -e "        ${YELLOW}→${NC} Troubleshoot later: limactl shell $VM_NAME speaker-test -t sine -f 440 -l 1"
 fi
 
 # ─── Step 6: Provision sandbox ────────────────────────────────
@@ -236,12 +264,12 @@ step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
 # Copy provision script to VM
-limactl cp "$SCRIPT_DIR/scripts/provision-vm.sh" pai:/home/claude/provision-vm.sh
+limactl cp "$SCRIPT_DIR/scripts/provision-vm.sh" "$VM_NAME":/home/claude/provision-vm.sh
 
 if [ "$VERBOSE" = true ]; then
-  limactl shell pai bash /home/claude/provision-vm.sh
+  limactl shell "$VM_NAME" bash /home/claude/provision-vm.sh
 else
-  limactl shell pai bash /home/claude/provision-vm.sh 2>&1 | tee -a "$LOG_FILE"
+  limactl shell "$VM_NAME" bash /home/claude/provision-vm.sh 2>&1 | tee -a "$LOG_FILE"
 fi
 ok "Sandbox provisioned"
 
@@ -257,20 +285,20 @@ ok "kitty configured (see config/kitty.conf)"
 
 # ─── Step 8: Build and install menu bar app ───────────────────
 
-step "Building PAI-Status menu bar app..."
+step "Building ${APP_NAME} menu bar app..."
 
 cd "$SCRIPT_DIR/menubar"
 
-if [ -d "/Applications/PAI-Status.app" ]; then
-  echo "        Updating PAI-Status app..."
+if [ -d "/Applications/${APP_BUNDLE}" ]; then
+  echo "        Updating ${APP_NAME} app..."
 fi
 
-bash build.sh --install
-ok "PAI-Status installed to /Applications"
+bash build.sh --install --vm-name="$VM_NAME" --port="$PORTAL_PORT" --app-name="$APP_NAME"
+ok "${APP_NAME} installed to /Applications"
 
 # Launch it
-open /Applications/PAI-Status.app 2>/dev/null || true
-ok "PAI-Status running in menu bar"
+open "/Applications/${APP_BUNDLE}" 2>/dev/null || true
+ok "${APP_NAME} running in menu bar"
 
 cd "$SCRIPT_DIR"
 
@@ -278,10 +306,10 @@ cd "$SCRIPT_DIR"
 
 step "Setting up browser bookmarks..."
 
-BOOKMARK_DEST="$HOME/Desktop/PAI Portal.webloc"
-cp "$SCRIPT_DIR/config/portal.webloc" "$BOOKMARK_DEST"
-ok "Portal bookmark created on Desktop: PAI Portal.webloc"
-ok "Portal URL: http://localhost:8080"
+BOOKMARK_DEST=$(pai_bookmark_path)
+pai_generate_webloc "$BOOKMARK_DEST"
+ok "Portal bookmark created on Desktop: $(basename "$BOOKMARK_DEST")"
+ok "Portal URL: http://localhost:${PORTAL_PORT}"
 
 # ─── Step 10: Verification & Authentication ──────────────────
 
@@ -290,7 +318,11 @@ step "Final verification..."
 # Run verify.sh if it exists
 if [ -f "$SCRIPT_DIR/scripts/verify.sh" ]; then
   echo ""
-  bash "$SCRIPT_DIR/scripts/verify.sh"
+  VERIFY_ARGS=(--port="$PORTAL_PORT")
+  if [ -n "$_PAI_NAME" ]; then
+    VERIFY_ARGS+=(--name="$_PAI_NAME")
+  fi
+  bash "$SCRIPT_DIR/scripts/verify.sh" "${VERIFY_ARGS[@]}"
   echo ""
 fi
 
@@ -303,21 +335,29 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo -e "${BOLD}${GREEN}  Setup complete!${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${GREEN}●${NC} Look for PAI-Status in your menu bar (top right)"
+echo -e "  ${GREEN}●${NC} Look for ${APP_NAME} in your menu bar (top right)"
 echo ""
 echo "  Getting started:"
 echo "    1. Click the PAI icon in your menu bar"
 echo "    2. Click ${BOLD}New PAI Session${NC} to open a terminal"
 echo "    3. Run 'claude' and authenticate with your API key"
-echo "    4. Optional: click ${BOLD}Launch at Login${NC} so PAI-Status"
+echo "    4. Optional: click ${BOLD}Launch at Login${NC} so ${APP_NAME}"
 echo "       starts automatically when you log in"
 echo ""
-echo "  From now on, PAI-Status is your control center:"
+echo "  From now on, ${APP_NAME} is your control center:"
 echo -e "    ${BOLD}New PAI Session${NC}     Open a new AI workspace"
 echo -e "    ${BOLD}Resume Session${NC}      Pick up where you left off"
 echo -e "    ${BOLD}Start/Stop VM${NC}       Control the sandbox"
 echo -e "    ${BOLD}Open PAI Web${NC}        Open the web portal"
 echo ""
 echo -e "  Install log: $LOG_FILE"
-echo -e "  Shared files: ~/pai-workspace/"
+echo -e "  Shared files: $WORKSPACE/"
+if [ -n "$INSTANCE_SUFFIX" ]; then
+  echo ""
+  echo "  All scripts support --name=${_PAI_NAME} to target this instance:"
+  echo "    ./scripts/launch.sh --name=${_PAI_NAME}"
+  echo "    ./scripts/upgrade.sh --name=${_PAI_NAME}"
+  echo "    ./scripts/verify.sh --name=${_PAI_NAME}"
+  echo "    ./scripts/uninstall.sh --name=${_PAI_NAME}"
+fi
 echo ""

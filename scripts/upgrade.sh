@@ -1,6 +1,6 @@
 #!/bin/bash
 # PAI Lima — Upgrade existing installation
-# Safe to run on an existing "pai" VM without losing data.
+# Safe to run on an existing VM without losing data.
 #
 # What this upgrades:
 #   - Host tools (Lima, kitty via brew)
@@ -17,11 +17,17 @@
 #   - Your work/ directory
 #
 # Usage:
-#   ./scripts/upgrade.sh
+#   ./scripts/upgrade.sh                  # Upgrade default instance
+#   ./scripts/upgrade.sh --name=v2        # Upgrade named instance
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared instance configuration
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 STEP=0
 TOTAL=7
 
@@ -43,6 +49,9 @@ skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already up to date)"; }
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  Sandbox My AI — PAI Lima Upgrade${NC}"
+if [ -n "$INSTANCE_SUFFIX" ]; then
+  echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
+fi
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo ""
 echo "  This upgrades your existing installation without losing data."
@@ -64,7 +73,6 @@ fi
 
 step "Checking shared directories..."
 
-WORKSPACE="$HOME/pai-workspace"
 DIRS=(claude-home data exchange portal work upstream)
 CREATED=0
 
@@ -76,7 +84,7 @@ for dir in "${DIRS[@]}"; do
 done
 
 if [ $CREATED -gt 0 ]; then
-  ok "Created $CREATED missing directories"
+  ok "Created $CREATED missing directories in $WORKSPACE/"
 else
   skip "All directories exist"
 fi
@@ -86,17 +94,14 @@ fi
 step "Checking VM networking..."
 
 # Verify VM exists
-if ! limactl list --json 2>/dev/null | grep -q '"name":"pai"'; then
-  echo -e "        ${YELLOW}⚠${NC}  No VM named 'pai' found. Run ./install.sh for a fresh install."
+VM_STATUS=$(pai_vm_status)
+if [ -z "$VM_STATUS" ]; then
+  echo -e "        ${YELLOW}⚠${NC}  No VM named '${VM_NAME}' found. Run ./install.sh for a fresh install."
   exit 1
 fi
 
-# Check if vzNAT is already configured
-VM_JSON=$(limactl list --json 2>/dev/null)
-VM_STATUS=$(echo "$VM_JSON" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
-
 # Check the actual lima config for vzNAT
-LIMA_CONFIG="$HOME/.lima/pai/lima.yaml"
+LIMA_CONFIG="$HOME/.lima/${VM_NAME}/lima.yaml"
 if [ -f "$LIMA_CONFIG" ] && grep -q "vzNAT" "$LIMA_CONFIG"; then
   skip "vzNAT networking already configured"
 else
@@ -106,24 +111,24 @@ else
 
   if [ "$VM_STATUS" = "Running" ]; then
     echo "        Stopping VM..."
-    limactl stop pai
+    limactl stop "$VM_NAME"
     ok "VM stopped"
   fi
 
   # Add vzNAT and port forwarding
-  limactl edit pai --network "vzNAT" --set '.portForwards = [{"guestPort": 8080, "hostIP": "127.0.0.1"}]'
+  limactl edit "$VM_NAME" --network "vzNAT" --set ".portForwards = [{\"guestPort\": ${PORTAL_PORT}, \"hostIP\": \"127.0.0.1\"}]"
   ok "vzNAT + port forwarding added"
 
   echo "        Starting VM..."
-  limactl start pai
+  limactl start "$VM_NAME"
   ok "VM restarted with new networking"
 fi
 
 # Make sure VM is running for remaining steps
-VM_STATUS=$(limactl list --json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+VM_STATUS=$(pai_vm_status)
 if [ "$VM_STATUS" != "Running" ]; then
   echo "        Starting VM..."
-  limactl start pai
+  limactl start "$VM_NAME"
   ok "VM started"
 fi
 
@@ -132,11 +137,11 @@ fi
 step "Updating VM tools and aliases..."
 
 # Copy latest provision script
-limactl cp "$SCRIPT_DIR/provision-vm.sh" pai:/home/claude/provision-vm.sh
+limactl cp "$SCRIPT_DIR/provision-vm.sh" "$VM_NAME":/home/claude/provision-vm.sh
 
 # Re-run the .bashrc environment block from provision-vm.sh (idempotent),
 # then update system packages
-limactl shell pai bash -c '
+limactl shell "$VM_NAME" bash -c '
   SENTINEL="# --- PAI environment (managed by provision-vm.sh) ---"
   ENV_BLOCK="
 # --- PAI environment (managed by provision-vm.sh) ---
@@ -190,7 +195,7 @@ ok "VM environment and packages updated"
 
 step "Upgrading Claude Code in VM..."
 
-limactl shell pai bash -lc '
+limactl shell "$VM_NAME" bash -lc '
   CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "")
 
   if [ -z "$CLAUDE_PATH" ]; then
@@ -212,23 +217,24 @@ ok "Claude Code up to date"
 
 # ─── Step 6: Rebuild menu bar app ─────────────────────────────
 
-step "Rebuilding PAI-Status menu bar app..."
+step "Rebuilding ${APP_NAME} menu bar app..."
 
-cd "$SCRIPT_DIR/menubar"
-bash build.sh --install
-ok "PAI-Status rebuilt and installed"
+cd "$SCRIPT_DIR/../menubar"
+bash build.sh --install --vm-name="$VM_NAME" --port="$PORTAL_PORT" --app-name="$APP_NAME"
+ok "${APP_NAME} rebuilt and installed"
 
 # Relaunch
-open /Applications/PAI-Status.app 2>/dev/null || true
-ok "PAI-Status running"
+open "/Applications/${APP_BUNDLE}" 2>/dev/null || true
+ok "${APP_NAME} running"
 cd "$SCRIPT_DIR"
 
 # ─── Step 7: Update portal bookmark ──────────────────────────
 
 step "Updating portal bookmark..."
 
-cp "$SCRIPT_DIR/config/portal.webloc" "$HOME/Desktop/PAI Portal.webloc"
-ok "Portal bookmark updated (http://localhost:8080)"
+BOOKMARK_DEST=$(pai_bookmark_path)
+pai_generate_webloc "$BOOKMARK_DEST"
+ok "Portal bookmark updated (http://localhost:${PORTAL_PORT})"
 
 # ─── Done ─────────────────────────────────────────────────────
 
@@ -238,15 +244,15 @@ echo -e "${BOLD}${GREEN}  Upgrade complete!${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
 echo "  What was preserved:"
-echo "    • All files in ~/pai-workspace/"
+echo "    • All files in $WORKSPACE/"
 echo "    • Claude Code authentication"
 echo "    • PAI configuration (~/.claude/)"
 echo "    • Claude Code sessions"
 echo ""
 echo "  What was updated:"
 echo "    • Host tools (Lima, kitty)"
-echo "    • PAI-Status menu bar app"
-echo "    • VM networking (vzNAT → localhost:8080)"
+echo "    • ${APP_NAME} menu bar app"
+echo "    • VM networking (vzNAT → localhost:${PORTAL_PORT})"
 echo "    • VM system packages and aliases"
 echo "    • Portal bookmark"
 echo ""

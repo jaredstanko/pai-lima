@@ -6,11 +6,16 @@
 # Can be run standalone or called by install.sh at the end of install.
 #
 # Usage:
-#   ./verify.sh
+#   ./verify.sh                  # Verify default instance
+#   ./verify.sh --name=v2        # Verify named instance
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared instance configuration
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
 # ─── Colors ───────────────────────────────────────────────────
 
@@ -85,6 +90,9 @@ check_installed() {
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  PAI Lima — System Verification${NC}"
+if [ -n "$INSTANCE_SUFFIX" ]; then
+  echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
+fi
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo ""
 
@@ -127,14 +135,13 @@ else
   failed "kitty terminal"
 fi
 
-# PAI-Status.app
-check_exists "PAI-Status.app" "/Applications/PAI-Status.app"
+# PAI-Status app (instance-specific)
+check_exists "${APP_NAME}.app" "/Applications/${APP_BUNDLE}"
 
 # kitty config
 check_exists "kitty.conf" "$HOME/.config/kitty/kitty.conf"
 
-# Workspace directories
-WORKSPACE="$HOME/pai-workspace"
+# Workspace directories (instance-specific)
 WORKSPACE_OK=true
 for dir in claude-home data exchange portal work upstream; do
   if [ ! -d "$WORKSPACE/$dir" ]; then
@@ -143,7 +150,7 @@ for dir in claude-home data exchange portal work upstream; do
   fi
 done
 if [ "$WORKSPACE_OK" = true ]; then
-  passed "Workspace directories (6/6)"
+  passed "Workspace directories (6/6)" "($WORKSPACE/)"
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -151,21 +158,20 @@ fi
 # ═══════════════════════════════════════════════════════════════
 
 echo ""
-echo -e "${BOLD}  VM (Lima)${NC}"
+echo -e "${BOLD}  VM (Lima: ${VM_NAME})${NC}"
 echo -e "  ──────────────────────────────────────────────"
 
 # Check VM exists and is running
-VM_JSON=$(limactl list --json 2>/dev/null || echo "")
-if ! echo "$VM_JSON" | grep -q '"name":"pai"'; then
-  failed "Lima VM 'pai'" "(does not exist)"
+VM_STATUS=$(pai_vm_status)
+if [ -z "$VM_STATUS" ]; then
+  failed "Lima VM '${VM_NAME}'" "(does not exist)"
   echo ""
   echo -e "  ${RED}Cannot check VM internals — VM does not exist.${NC}"
 else
-  VM_STATUS=$(echo "$VM_JSON" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
   if [ "$VM_STATUS" = "Running" ]; then
-    passed "Lima VM 'pai'" "(running)"
+    passed "Lima VM '${VM_NAME}'" "(running)"
   else
-    failed "Lima VM 'pai'" "(status: $VM_STATUS, expected: Running)"
+    failed "Lima VM '${VM_NAME}'" "(status: $VM_STATUS, expected: Running)"
   fi
 
   if [ "$VM_STATUS" = "Running" ]; then
@@ -184,7 +190,7 @@ else
         test -d "/home/claude/$m" && echo "MOUNT_${m}=YES" || echo "MOUNT_${m}=NO"
       done
     '
-    VM_RESULTS=$(limactl shell pai bash -lc "$VM_CHECK_SCRIPT" 2>/dev/null || echo "")
+    VM_RESULTS=$(limactl shell "$VM_NAME" bash -lc "$VM_CHECK_SCRIPT" 2>/dev/null || echo "")
 
     # Parse results
     get_val() { echo "$VM_RESULTS" | grep "^$1=" | cut -d= -f2- | tr -d '[:space:]'; }
@@ -229,7 +235,7 @@ echo ""
 
 if [ $FAIL -gt 0 ]; then
   echo -e "  ${RED}Some checks failed.${NC} Review output above for details."
-  echo -e "  Re-run ${BOLD}./install.sh${NC} to fix, or check ${BOLD}~/.pai-install.log${NC}"
+  echo -e "  Re-run ${BOLD}./install.sh${NC} to fix, or check ${BOLD}${LOG_FILE}${NC}"
   exit 1
 else
   echo -e "  ${GREEN}All checks passed.${NC}"

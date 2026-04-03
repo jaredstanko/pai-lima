@@ -3,15 +3,23 @@
 # Opens a kitty window connected to the VM running PAI (Claude Code).
 #
 # Usage:
-#   ./scripts/launch.sh              # Open PAI session
-#   ./scripts/launch.sh --resume     # Resume a previous Claude Code session
-#   ./scripts/launch.sh --shell      # Open a plain shell in the VM
+#   ./scripts/launch.sh                    # Open PAI session (default instance)
+#   ./scripts/launch.sh --resume           # Resume a previous Claude Code session
+#   ./scripts/launch.sh --shell            # Open a plain shell in the VM
+#   ./scripts/launch.sh --name=v2          # Target a named instance
+#   ./scripts/launch.sh --name=v2 --shell  # Shell into a named instance
 #
 # Prerequisites:
 #   - kitty installed (brew install --cask kitty)
-#   - Lima VM "pai" created and started (install.sh handles this)
+#   - Lima VM created and started (install.sh handles this)
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared instance configuration
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
 # Check prerequisites
 if ! command -v kitty &>/dev/null; then
@@ -25,45 +33,38 @@ if ! command -v limactl &>/dev/null; then
 fi
 
 # Start the VM if it's not running
-VM_STATUS=$(limactl list --json 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+VM_STATUS=$(pai_vm_status)
 if [ "$VM_STATUS" != "Running" ]; then
-  echo "Starting PAI VM..."
-  limactl start pai
+  echo "Starting ${VM_NAME} VM..."
+  limactl start "$VM_NAME"
 fi
 
-# Find kitty socket (kitty appends -<PID> to listen_on path)
-find_kitty_socket() {
-  for sock in /tmp/kitty-*; do
-    [ -S "$sock" ] && echo "unix:$sock" && return 0
-  done
-  return 1
-}
+# Determine action from remaining args
+ACTION=""
+for arg in "${_PAI_REMAINING_ARGS[@]}"; do
+  case "$arg" in
+    --resume|-r) ACTION="resume" ;;
+    --shell|-s) ACTION="shell" ;;
+    *) ;;
+  esac
+done
 
-# Try tab in existing Kitty, fall back to new window
-open_kitty_tab() {
-  local title="$1"
-  shift
-  local socket
-  if socket=$(find_kitty_socket) && timeout 5 kitty @ --to "$socket" launch --type=tab --title "$title" -- "$@" 2>/dev/null; then
-    return
-  fi
-  kitty --title "$title" "$@"
-}
+TITLE_PREFIX="${INSTANCE_NAME}"
 
-case "${1:-}" in
-  --resume|-r)
+case "$ACTION" in
+  resume)
     echo "Opening session picker..."
-    open_kitty_tab "Resume Session" limactl shell pai bash -lc "claude -r"
+    pai_open_kitty_tab "${TITLE_PREFIX}: Resume" limactl shell "$VM_NAME" bash -lc "claude -r"
     ;;
-  --shell|-s)
+  shell)
     echo "Opening shell..."
-    open_kitty_tab "PAI Shell" limactl shell pai
+    pai_open_kitty_tab "${TITLE_PREFIX}: Shell" limactl shell "$VM_NAME"
     ;;
   *)
     echo "Launching PAI..."
-    open_kitty_tab "PAI" limactl shell pai bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
+    pai_open_kitty_tab "${TITLE_PREFIX}" limactl shell "$VM_NAME" bash -lc "bun ~/.claude/PAI/Tools/pai.ts"
     ;;
 esac
 
 echo ""
-echo "Portal: http://localhost:8080"
+echo "Portal: http://localhost:${PORTAL_PORT}"

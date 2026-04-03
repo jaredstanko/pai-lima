@@ -3,18 +3,26 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source shared instance configuration (sets VM_NAME, WORKSPACE, etc.)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 LIMA_HOME="${LIMA_HOME:-$HOME/.lima}"
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/pai-workspace}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$WORKSPACE}"
 BACKUP_DIR="$SCRIPT_DIR"
 BACKUP_PREFIX="backup-vm-"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 usage() {
-  echo "Usage: $(basename "$0") <subcommand> [vm-name]"
+  echo "Usage: $(basename "$0") <subcommand> [--name=X]"
   echo ""
   echo "Subcommands:"
-  echo "  backup  [vm-name]   Back up a Lima VM (default: 'default')"
-  echo "  restore [vm-name]   Restore a Lima VM from a backup"
+  echo "  backup              Back up the Lima VM and workspace"
+  echo "  restore             Restore from a backup"
+  echo ""
+  echo "Options:"
+  echo "  --name=X            Target a named instance (default: pai)"
   echo ""
   echo "Backups are stored in: $BACKUP_DIR/$BACKUP_PREFIX<date>-<vm-name>/"
   exit 1
@@ -236,15 +244,26 @@ do_restore() {
 }
 
 # ── Entry point ───────────────────────────────────────────────────────────────
-if [[ $# -lt 1 ]]; then
+# Extract subcommand from remaining args (--name already consumed by common.sh)
+SUBCOMMAND=""
+POSITIONAL_VM=""
+for arg in "${_PAI_REMAINING_ARGS[@]}"; do
+  case "$arg" in
+    backup|restore) SUBCOMMAND="$arg" ;;
+    -*) ;; # skip other flags
+    *) POSITIONAL_VM="$arg" ;;
+  esac
+done
+
+if [[ -z "$SUBCOMMAND" ]]; then
   usage
 fi
 
-SUBCOMMAND="$1"
-VM_NAME="${2:-}"
+# Use positional VM name if given, otherwise use instance name from --name flag
+BACKUP_VM_NAME="${POSITIONAL_VM:-$VM_NAME}"
 
 case "$SUBCOMMAND" in
-  backup)  do_backup  "$VM_NAME" ;;
-  restore) do_restore "$VM_NAME" ;;
+  backup)  do_backup  "$BACKUP_VM_NAME" ;;
+  restore) do_restore "$BACKUP_VM_NAME" ;;
   *)       usage ;;
 esac

@@ -1,12 +1,19 @@
 #!/bin/bash
 # PAI Lima — Host Cleanup
 # Removes everything installed by install.sh and scripts/upgrade.sh.
-# Asks before removing ~/pai-workspace/ (your data lives there).
+# Asks before removing workspace data.
 #
 # Usage:
-#   ./scripts/uninstall.sh
+#   ./scripts/uninstall.sh                 # Uninstall default instance
+#   ./scripts/uninstall.sh --name=v2       # Uninstall named instance
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source shared instance configuration
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -22,10 +29,15 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 echo ""
 echo -e "${BOLD}${RED}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  PAI Lima — Host Cleanup${NC}"
+if [ -n "$INSTANCE_SUFFIX" ]; then
+  echo -e "${BOLD}  Instance: ${RED}${INSTANCE_NAME}${NC}"
+fi
 echo -e "${BOLD}${RED}═══════════════════════════════════════════════${NC}"
 echo ""
 echo "  This will remove PAI Lima components from your Mac."
 echo "  It will NOT uninstall Lima, kitty, or Homebrew themselves."
+echo ""
+echo "  Target: VM '${VM_NAME}', workspace '${WORKSPACE}/'"
 echo ""
 
 # ─── 1. Stop and remove Lima VM ──────────────────────────────
@@ -33,17 +45,17 @@ echo ""
 echo -e "${CYAN}[1/4]${NC} ${BOLD}Lima VM${NC}"
 
 if command -v limactl &>/dev/null; then
-  if limactl list --format '{{.Name}}' 2>/dev/null | grep -q "^pai$"; then
-    VM_STATUS=$(limactl list --format '{{.Status}}' --filter "Name=pai" 2>/dev/null || echo "Unknown")
+  VM_STATUS=$(pai_vm_status)
+  if [ -n "$VM_STATUS" ]; then
     if [ "$VM_STATUS" = "Running" ]; then
       echo "  Stopping VM..."
-      limactl stop pai 2>/dev/null || true
+      limactl stop "$VM_NAME" 2>/dev/null || true
     fi
-    echo "  Deleting VM 'pai'..."
-    limactl delete pai --force 2>/dev/null || true
-    ok "VM 'pai' deleted"
+    echo "  Deleting VM '${VM_NAME}'..."
+    limactl delete "$VM_NAME" --force 2>/dev/null || true
+    ok "VM '${VM_NAME}' deleted"
   else
-    skip "VM 'pai'"
+    skip "VM '${VM_NAME}'"
   fi
 else
   skip "limactl not installed"
@@ -51,46 +63,50 @@ fi
 
 # ─── 2. Remove PAI-Status menu bar app ───────────────────────
 
-echo -e "${CYAN}[2/4]${NC} ${BOLD}PAI-Status menu bar app${NC}"
+echo -e "${CYAN}[2/4]${NC} ${BOLD}${APP_NAME} menu bar app${NC}"
 
-# Kill running instances (current and old names)
-osascript -e 'tell application "PAI-Status" to quit' 2>/dev/null || true
-osascript -e 'tell application "PAI Status" to quit' 2>/dev/null || true
-osascript -e 'tell application "PAIStatus" to quit' 2>/dev/null || true
-pkill -f PAIStatus 2>/dev/null || true
+# Kill running instances
+osascript -e "tell application \"${APP_NAME}\" to quit" 2>/dev/null || true
+pkill -f "PAIStatus.*${VM_NAME}" 2>/dev/null || true
 
 REMOVED_APP=false
 
-# Current name
-if [ -d "/Applications/PAI-Status.app" ]; then
-  rm -rf "/Applications/PAI-Status.app"
-  ok "Removed /Applications/PAI-Status.app"
+if [ -d "/Applications/${APP_BUNDLE}" ]; then
+  rm -rf "/Applications/${APP_BUNDLE}"
+  ok "Removed /Applications/${APP_BUNDLE}"
   REMOVED_APP=true
 fi
 
-# Old names from previous iterations
-for old_app in "PAIStatus.app" "PAI Status.app"; do
-  if [ -d "/Applications/$old_app" ]; then
-    rm -rf "/Applications/$old_app"
-    ok "Removed /Applications/$old_app (old name)"
-    REMOVED_APP=true
-  fi
-done
-
-if [ "$REMOVED_APP" = false ]; then
-  skip "PAI-Status app"
+# Clean up old name variants for default instance only
+if [ "$VM_NAME" = "pai" ]; then
+  for old_app in "PAIStatus.app" "PAI Status.app"; do
+    if [ -d "/Applications/$old_app" ]; then
+      rm -rf "/Applications/$old_app"
+      ok "Removed /Applications/$old_app (old name)"
+      REMOVED_APP=true
+    fi
+  done
 fi
 
-# ─── 3. Remove launch agents ─────────────────────────────────
+if [ "$REMOVED_APP" = false ]; then
+  skip "${APP_NAME} app"
+fi
+
+# ─── 3. Remove launch agents and bookmarks ──────────────────
 
 echo -e "${CYAN}[3/4]${NC} ${BOLD}Launch agents and bookmarks${NC}"
 
 AGENTS=(
-  "com.pai.status"
-  "com.pai.lima-apple-bridge"
-  "com.pai.apple-bridge"
-  "com.kai.observability"
+  "${LAUNCH_AGENT}"
 )
+# For default instance, also clean up related agents
+if [ "$VM_NAME" = "pai" ]; then
+  AGENTS+=(
+    "com.pai.lima-apple-bridge"
+    "com.pai.apple-bridge"
+    "com.kai.observability"
+  )
+fi
 
 for agent in "${AGENTS[@]}"; do
   PLIST="$HOME/Library/LaunchAgents/${agent}.plist"
@@ -104,36 +120,38 @@ for agent in "${AGENTS[@]}"; do
 done
 
 # Desktop bookmark
-if [ -f "$HOME/Desktop/PAI Portal.webloc" ]; then
-  rm -f "$HOME/Desktop/PAI Portal.webloc"
-  ok "Removed Desktop/PAI Portal.webloc"
+BOOKMARK_PATH=$(pai_bookmark_path)
+if [ -f "$BOOKMARK_PATH" ]; then
+  rm -f "$BOOKMARK_PATH"
+  ok "Removed $(basename "$BOOKMARK_PATH")"
 else
   skip "Portal bookmark"
 fi
 
-# Bridge token
-if [ -f "$HOME/.apple-mcp-bridge-token" ]; then
-  rm -f "$HOME/.apple-mcp-bridge-token"
-  ok "Removed ~/.apple-mcp-bridge-token"
-else
-  skip "Bridge token"
-fi
+# Bridge token and audit log (default instance only)
+if [ "$VM_NAME" = "pai" ]; then
+  if [ -f "$HOME/.apple-mcp-bridge-token" ]; then
+    rm -f "$HOME/.apple-mcp-bridge-token"
+    ok "Removed ~/.apple-mcp-bridge-token"
+  else
+    skip "Bridge token"
+  fi
 
-# Audit log
-if [ -f "$HOME/.apple-mcp-audit.jsonl" ]; then
-  rm -f "$HOME/.apple-mcp-audit.jsonl"
-  ok "Removed ~/.apple-mcp-audit.jsonl"
-else
-  skip "Audit log"
+  if [ -f "$HOME/.apple-mcp-audit.jsonl" ]; then
+    rm -f "$HOME/.apple-mcp-audit.jsonl"
+    ok "Removed ~/.apple-mcp-audit.jsonl"
+  else
+    skip "Audit log"
+  fi
 fi
 
 # ─── 4. Workspace data (ASKS FIRST) ──────────────────────────
 
 echo -e "${CYAN}[4/4]${NC} ${BOLD}Workspace data${NC}"
 
-if [ -d "$HOME/pai-workspace" ]; then
+if [ -d "$WORKSPACE" ]; then
   echo ""
-  echo -e "  ${RED}${BOLD}WARNING: ~/pai-workspace/ contains your data!${NC}"
+  echo -e "  ${RED}${BOLD}WARNING: ${WORKSPACE}/ contains your data!${NC}"
   echo ""
   echo "  This includes:"
   echo "    • claude-home/ — PAI config, settings, memory"
@@ -146,21 +164,21 @@ if [ -d "$HOME/pai-workspace" ]; then
 
   # Show sizes
   echo "  Directory sizes:"
-  du -sh "$HOME/pai-workspace/"* 2>/dev/null | while read -r size dir; do
+  du -sh "$WORKSPACE/"* 2>/dev/null | while read -r size dir; do
     echo "    $size  $(basename "$dir")"
   done
   echo ""
 
-  echo -ne "  ${RED}Delete ~/pai-workspace/ and ALL its contents? [y/N]:${NC} "
+  echo -ne "  ${RED}Delete ${WORKSPACE}/ and ALL its contents? [y/N]:${NC} "
   read -r CONFIRM
   if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-    rm -rf "$HOME/pai-workspace"
-    ok "Removed ~/pai-workspace/"
+    rm -rf "$WORKSPACE"
+    ok "Removed ${WORKSPACE}/"
   else
-    warn "Kept ~/pai-workspace/ — you can remove it manually later"
+    warn "Kept ${WORKSPACE}/ — you can remove it manually later"
   fi
 else
-  skip "~/pai-workspace/"
+  skip "${WORKSPACE}/"
 fi
 
 # ─── Done ─────────────────────────────────────────────────────
@@ -171,18 +189,18 @@ echo -e "${BOLD}${GREEN}  Cleanup complete${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
 echo "  What was removed:"
-echo "    • Lima VM 'pai'"
-echo "    • PAI-Status menu bar app (all name variants)"
+echo "    • Lima VM '${VM_NAME}'"
+echo "    • ${APP_NAME} menu bar app"
 echo "    • Launch agents"
-echo "    • Desktop bookmark, bridge token, audit log"
+echo "    • Desktop bookmark"
 echo ""
 echo "  What was NOT removed:"
 echo "    • Lima, kitty, Hack Nerd Font, Homebrew"
 echo "    • kitty.conf (~/.config/kitty/)"
 echo "    • This repo (pai-lima/)"
-if [ -d "$HOME/pai-workspace" ]; then
-  echo "    • ~/pai-workspace/ (you chose to keep it)"
+if [ -d "$WORKSPACE" ]; then
+  echo "    • ${WORKSPACE}/ (you chose to keep it)"
 fi
 echo ""
-echo "  To do a fresh install: ./install.sh"
+echo "  To do a fresh install: ./install.sh${INSTANCE_SUFFIX:+ --name=${_PAI_NAME}}"
 echo ""

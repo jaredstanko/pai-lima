@@ -7,9 +7,10 @@ A sandboxed AI workspace running Claude Code in an isolated VM on your Mac. One 
 - **Sandboxed AI** — Claude Code runs inside an isolated VM, not on your Mac
 - **Menu bar control** — Start sessions, stop the VM, open the web portal — all from one icon
 - **Session resume** — Pick up previous conversations where you left off
-- **Web Portal** - Hosted locally (in the VM) for information review and exchange
+- **Web Portal** — Hosted locally (in the VM) for information review and exchange
 - **Shared folders** — `~/pai-workspace/` contains folders that the AI uses to store and manage information. It is shared with the host.
 - **Audio** — The AI can speak through your Mac speakers
+- **Parallel installs** — Run multiple instances side by side with `--name`
 
 ## Requirements
 
@@ -30,9 +31,37 @@ That's it. The installer handles everything: tools, VM, provisioning, and the me
 ### Install options
 
 ```bash
-./install.sh              # Normal install
-./install.sh --verbose    # Show detailed output
+./install.sh                        # Normal install
+./install.sh --verbose              # Show detailed output
+./install.sh --name=v2              # Parallel install as a separate instance
+./install.sh --name=v2 --port=8082  # Parallel install with a specific portal port
 ```
+
+### Parallel installs
+
+Use `--name` to run multiple instances side by side. Each gets its own VM, workspace, menu bar app, and portal port:
+
+```bash
+# Install a second instance for testing
+./install.sh --name=v2
+
+# Everything is isolated:
+#   VM:        pai-v2
+#   Workspace: ~/pai-workspace-v2/
+#   App:       PAI-Status-v2.app
+#   Portal:    http://localhost:8081 (auto-assigned)
+```
+
+All scripts accept `--name` to target a specific instance:
+
+```bash
+./scripts/launch.sh --name=v2
+./scripts/verify.sh --name=v2
+./scripts/upgrade.sh --name=v2
+./scripts/uninstall.sh --name=v2
+```
+
+The default instance (no `--name`) is unaffected.
 
 ## Using PAI
 
@@ -50,19 +79,19 @@ After install, **PAI-Status appears in your menu bar** (top right). This is your
 Click the PAI icon and choose what you need:
 
 ```
-● PAI                          ← green = running, red = stopped
-├─ VM: Running
-├─ Start VM / Stop VM
-├─ ─────────────────────────
-├─ New PAI Session…            ← start a new AI workspace
-├─ Active Sessions
-│   └─ Resume Session…         ← pick up where you left off
-├─ ─────────────────────────
-├─ Open PAI Web                ← web portal and dashboards
-├─ Open a Terminal             ← plain shell (no AI)
-├─ ─────────────────────────
-├─ Launch at Login ☐           ← start PAI-Status automatically
-└─ Quit PAI-Status
+● PAI                          <- green = running, red = stopped
+|- VM: Running
+|- Start VM / Stop VM
+|- --------------------------
+|- New PAI Session...          <- start a new AI workspace
+|- Active Sessions
+|   '- Resume Session...      <- pick up where you left off
+|- --------------------------
+|- Open PAI Web                <- web portal and dashboards
+|- Open a Terminal             <- plain shell (no AI)
+|- --------------------------
+|- Launch at Login             <- start PAI-Status automatically
+'- Quit PAI-Status
 ```
 
 **Tip:** Check **Launch at Login** so PAI-Status is always ready when you open your Mac. The VM doesn't auto-start — you still click Start VM when you're ready to work.
@@ -73,12 +102,12 @@ Your Mac and the AI sandbox share files through `~/pai-workspace/`:
 
 ```
 ~/pai-workspace/
-├─ exchange/    Drop files here — the AI reads them at ~/exchange/
-├─ work/        AI outputs and projects appear here
-├─ data/        Datasets, databases
-├─ portal/      Web portal files
-├─ claude-home/ AI configuration (settings, memory, sessions)
-└─ upstream/    Reference repos
+|- exchange/    Drop files here -- the AI reads them at ~/exchange/
+|- work/        AI outputs and projects appear here
+|- data/        Datasets, databases
+|- portal/      Web portal files
+|- claude-home/ AI configuration (settings, memory, sessions)
+'- upstream/    Reference repos
 ```
 
 Your data lives on your Mac, not inside the VM. You can destroy and recreate the VM without losing anything.
@@ -97,6 +126,7 @@ If you prefer the terminal over the menu bar:
 ./scripts/launch.sh              # New PAI session
 ./scripts/launch.sh --resume     # Resume a previous session
 ./scripts/launch.sh --shell      # Plain shell in the VM
+./scripts/launch.sh --name=v2    # Target a named instance
 ```
 
 ### Verification
@@ -106,12 +136,18 @@ Run `./scripts/verify.sh` anytime to check system health:
 - **PASS** — component is installed and working
 - **FAIL** — component missing or broken
 
+```bash
+./scripts/verify.sh              # Check default instance
+./scripts/verify.sh --name=v2    # Check a named instance
+```
+
 ### Upgrading
 
 ```bash
 cd pai-lima
 git pull
 ./scripts/upgrade.sh
+./scripts/upgrade.sh --name=v2   # Upgrade a named instance
 ```
 
 Your workspace, authentication, and sessions are preserved.
@@ -119,17 +155,19 @@ Your workspace, authentication, and sessions are preserved.
 ### Backup & Restore
 
 ```bash
-./scripts/backup-restore.sh backup pai     # Back up VM + workspace
-./scripts/backup-restore.sh restore pai    # Restore from a backup
+./scripts/backup-restore.sh backup              # Back up default instance
+./scripts/backup-restore.sh backup --name=v2    # Back up a named instance
+./scripts/backup-restore.sh restore             # Restore from a backup
 ```
 
 ### Uninstall
 
 ```bash
-./scripts/uninstall.sh
+./scripts/uninstall.sh              # Remove default instance
+./scripts/uninstall.sh --name=v2    # Remove a named instance
 ```
 
-Removes the VM, menu bar app, and launch agents. Asks before touching `~/pai-workspace/`.
+Removes the VM, menu bar app, and launch agents. Asks before touching workspace data.
 
 ### PAI Companion (Web Portal)
 
@@ -156,40 +194,46 @@ limactl edit pai --cpus 6 --memory 6
 limactl start pai
 ```
 
+For a named instance, replace `pai` with the instance name (e.g., `pai-v2`).
+
 Edit `pai.yaml` before running `./install.sh` to change defaults for new installs.
 
 ### Project Structure
 
 ```
 pai-lima/
-├─ install.sh               The installer (run this)
-├─ pai.yaml                 VM configuration
-├─ scripts/
-│  ├─ provision-vm.sh       VM provisioning (called by installer)
-│  ├─ verify.sh             System health check
-│  ├─ launch.sh             CLI: open a PAI session
-│  ├─ upgrade.sh            Upgrade existing install
-│  ├─ uninstall.sh          Remove everything
-│  └─ backup-restore.sh     Backup and restore
-├─ config/
-│  ├─ kitty.conf            Terminal configuration
-│  └─ portal.webloc         Portal bookmark
-├─ menubar/
-│  ├─ PAIStatus.swift       Menu bar app source
-│  ├─ build.sh              Compile script
-│  └─ Info.plist             App metadata
-└─ README.md
+|- install.sh               The installer (run this)
+|- pai.yaml                 VM configuration template
+|- scripts/
+|  |- common.sh             Shared instance config (--name, --port parsing)
+|  |- provision-vm.sh       VM provisioning (called by installer)
+|  |- verify.sh             System health check
+|  |- launch.sh             CLI: open a PAI session
+|  |- session.sh            Alias for launch.sh
+|  |- upgrade.sh            Upgrade existing install
+|  |- uninstall.sh          Remove everything
+|  '- backup-restore.sh     Backup and restore
+|- config/
+|  |- kitty.conf            Terminal configuration
+|  '- portal.webloc         Portal bookmark template
+|- menubar/
+|  |- PAIStatus.swift       Menu bar app source
+|  |- build.sh              Compile script
+|  '- Info.plist            App metadata
+'- README.md
 ```
 
 ### Troubleshooting
 
-**Install fails at "Creating sandbox VM"** — Run `limactl delete pai --force` and re-run `./install.sh`.
+**Install fails at "Creating sandbox VM"** — Run `limactl delete pai --force` and re-run `./install.sh`. For named instances, use `limactl delete pai-NAME --force`.
 
 **PAI-Status not in menu bar** — Run `open /Applications/PAI-Status.app` or rebuild: `cd menubar && ./build.sh --install`.
 
 **No audio** — Inside the VM: `sudo modprobe virtio_snd`.
 
 **Shared folders not visible** — Run `mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}`.
+
+**Port conflict with named instance** — Use `--port=N` to pick a specific port: `./install.sh --name=v2 --port=8082`.
 
 ## Credits
 
