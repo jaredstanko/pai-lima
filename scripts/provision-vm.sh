@@ -79,13 +79,46 @@ fi
 
 retry "sudo apt-get update -qq"
 # shellcheck disable=SC2086
-retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree kitty-terminfo ca-certificates gnupg"
+retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree kitty-terminfo ca-certificates gnupg espeak-ng"
 log "System packages installed"
 
 if [ "$NODE_NEEDS_SETUP" = true ]; then
   retry "sudo apt-get install -y -qq nodejs"
   log "Node.js $(node --version) installed from NodeSource"
 fi
+
+# Install 'say' shim — Linux replacement for macOS 'say' command.
+# Fallback chain: Kokoro (if running) → espeak-ng → silence.
+# PAI's VoiceServer calls 'say' when no ElevenLabs key is configured.
+mkdir -p "$HOME/.local/bin"
+cat > "$HOME/.local/bin/say" <<'SAYSHIM'
+#!/bin/bash
+# say — Linux shim for macOS 'say' command
+# Fallback: Kokoro TTS → espeak-ng → silence
+TEXT="$*"
+[ -z "$TEXT" ] && exit 0
+
+# Try Kokoro TTS if running
+if curl -sf http://localhost:7880/health >/dev/null 2>&1; then
+  TMPFILE=$(mktemp /tmp/say-XXXXXX.mp3)
+  if curl -s -X POST http://localhost:7880/tts \
+    -H "Content-Type: application/json" \
+    -d "{\"text\": \"$TEXT\"}" -o "$TMPFILE" 2>/dev/null && [ -s "$TMPFILE" ]; then
+    PULSE_SERVER=unix:/run/pulse/native ffplay -nodisp -autoexit -loglevel quiet "$TMPFILE" 2>/dev/null
+    rm -f "$TMPFILE"
+    exit 0
+  fi
+  rm -f "$TMPFILE"
+fi
+
+# Fall back to espeak-ng
+if command -v espeak-ng >/dev/null 2>&1; then
+  PULSE_SERVER=unix:/run/pulse/native espeak-ng "$TEXT" 2>/dev/null
+  exit 0
+fi
+SAYSHIM
+chmod +x "$HOME/.local/bin/say"
+log "Linux 'say' shim installed (Kokoro → espeak-ng fallback)"
 
 # ─── Step 2: Bun ────────────────────────────────────────────
 step "2/6" "Installing Bun..."
