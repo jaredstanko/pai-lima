@@ -83,7 +83,8 @@ export INSTANCE_NAME INSTANCE_SUFFIX VM_NAME WORKSPACE PORTAL_PORT APP_NAME APP_
 pai_vm_status() {
   local json
   json=$(limactl list --json 2>/dev/null || echo "")
-  echo "$json" | grep -A5 "\"name\":\"${VM_NAME}\"" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4
+  # grep exits 1 on no match — must not propagate under set -eo pipefail
+  echo "$json" | grep -A5 "\"name\":\"${VM_NAME}\"" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || true
 }
 
 # Generate a .webloc bookmark file for the portal
