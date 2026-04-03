@@ -79,12 +79,29 @@ fi
 
 retry "sudo apt-get update -qq"
 # shellcheck disable=SC2086
-retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree kitty-terminfo ca-certificates gnupg espeak-ng"
+retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip unzip tree htop kitty-terminfo ca-certificates gnupg espeak-ng"
 log "System packages installed"
 
 if [ "$NODE_NEEDS_SETUP" = true ]; then
   retry "sudo apt-get install -y -qq nodejs"
   log "Node.js $(node --version) installed from NodeSource"
+fi
+
+# yt-dlp from pip (apt version is years behind, YouTube breaks stale versions)
+if command -v yt-dlp &>/dev/null; then
+  log "yt-dlp already installed: $(yt-dlp --version 2>/dev/null || echo 'present')"
+else
+  retry "python3 -m pip install --break-system-packages -U yt-dlp"
+  log "yt-dlp installed from pip: $(yt-dlp --version 2>/dev/null || echo 'installed')"
+fi
+
+# uv — modern Python package runner (replaces pip for running scripts)
+if command -v uv &>/dev/null; then
+  log "uv already installed: $(uv --version 2>/dev/null || echo 'present')"
+else
+  retry "curl -LsSf https://astral.sh/uv/install.sh | sh"
+  export PATH="$HOME/.local/bin:$PATH"
+  log "uv installed: $(uv --version 2>/dev/null || echo 'installed')"
 fi
 
 # Install 'say' shim — Linux replacement for macOS 'say' command.
