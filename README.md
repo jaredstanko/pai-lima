@@ -1,24 +1,19 @@
 # pai-lima
 
-A sandboxed AI workspace running Claude Code in an isolated VM on your Mac. One script to install, then a menu bar app to control everything.
+A sandboxed AI workspace running Claude Code on your Mac. One script to install, a menu bar app to control it.
 
-## What You Get
+## What You Need
 
-- **Sandboxed AI** — Claude Code runs inside an isolated VM, not on your Mac
-- **Menu bar control** — Start sessions, stop the VM, open the web portal — all from one icon
-- **Session resume** — Pick up previous conversations where you left off
-- **Web Portal** — Hosted locally (in the VM) for information review and exchange
-- **Shared folders** — `~/pai-workspace/` contains folders that the AI uses to store and manage information. It is shared with the host.
-- **Audio** — The AI can speak through your Mac speakers
-- **Parallel installs** — Run multiple instances side by side with `--name`
+- A Mac with Apple Silicon (M1, M2, M3, or M4)
+- macOS 13 (Ventura) or later
+- An [Anthropic account](https://console.anthropic.com/) (free to create)
+- About 10 minutes for the first install
 
-## Requirements
+## Quick Start
 
-- macOS 13+ (Ventura or later)
-- Apple Silicon (M1/M2/M3/M4)
-- An [Anthropic account](https://console.anthropic.com/) for Claude Code
+### Step 1: Install
 
-## Install
+Open Terminal (it's in Applications > Utilities) and paste these three lines:
 
 ```bash
 git clone https://github.com/jaredstanko/pai-lima.git
@@ -26,26 +21,114 @@ cd pai-lima
 ./install.sh
 ```
 
-That's it. The installer handles everything: tools, VM, provisioning, and the menu bar app. Takes about 5-10 minutes on a fresh machine.
+The installer will download and set up everything automatically. You'll see a lot of output scrolling by -- **ignore it all** until you see the final instructions.
 
-### Install options
+### Step 2: Enable Launch at Login
+
+When the install finishes, look at the **top-right of your screen** for the PAI-Status icon (a small computer icon with a colored dot).
+
+Click it, then click **Launch at Login**. This makes it start automatically when you open your Mac.
+
+### Step 3: Open a PAI Session
+
+Click the PAI-Status icon again, then click **New PAI Session**. A terminal window will open.
+
+### Step 4: Sign In
+
+Claude Code will ask you to sign in. It opens a browser -- log in with your Anthropic account.
+
+When it asks "Do you trust /home/claude/.claude?" say **yes**.
+
+### Step 5: Set Up the Web Portal
+
+Once you're signed in, paste this message into the terminal:
+
+```
+Install PAI Companion following ~/pai-companion/companion/INSTALL.md.
+Skip Docker (use Bun directly for the portal) and skip the voice
+module. Keep ~/.vm-ip set to localhost and VM_IP=localhost in .env.
+After installation, verify the portal is running at localhost:8080
+and verify the voice server is working. Set both to start on boot.
+```
+
+Claude Code will ask: **"Do you want to create PRD.md?"** -- press **2** (Yes) to allow it to edit settings for this session.
+
+Wait for it to finish. This takes a few minutes.
+
+### Step 6: You're Done
+
+Open http://localhost:8080 in your browser to see the web portal. From now on, just click **New PAI Session** in the menu bar whenever you want to talk to your AI.
+
+---
+
+## What You Get
+
+- **Sandboxed AI** -- Claude Code runs inside an isolated VM, not directly on your Mac
+- **Menu bar control** -- start sessions, stop the VM, open the web portal from one icon
+- **Session resume** -- pick up previous conversations where you left off
+- **Web portal** -- a local website for viewing AI-created content and exchanging files
+- **Shared folders** -- `~/pai-workspace/` on your Mac is shared with the AI
+- **Audio** -- the AI can speak through your Mac speakers
+
+## The Menu Bar App
+
+After install, PAI-Status lives in your menu bar (top right). It looks like a small computer icon with a colored dot (green = running, red = stopped).
+
+```
+PAI-Status menu:
+  VM: Running
+  Start VM / Stop VM
+  ──────────────────
+  New PAI Session       <- opens a new AI workspace
+  Active Sessions
+    Resume Session      <- pick up where you left off
+  ──────────────────
+  Open PAI Web          <- opens the web portal
+  Open a Terminal       <- plain shell (no AI)
+  ──────────────────
+  Launch at Login
+  Quit PAI-Status
+```
+
+## Shared Files
+
+Your Mac and the AI share files through `~/pai-workspace/`:
+
+```
+~/pai-workspace/
+  exchange/    Drop files here -- the AI can read them
+  work/        AI outputs and projects
+  data/        Datasets and databases
+  portal/      Web portal content
+  claude-home/ AI settings, memory, sessions
+  upstream/    Reference repos
+```
+
+Your data lives on your Mac. You can destroy and recreate the VM without losing anything.
+
+---
+
+## Advanced
+
+Everything below is for power users who want to customize or troubleshoot.
+
+### Install Options
 
 ```bash
 ./install.sh                        # Normal install
 ./install.sh --verbose              # Show detailed output
 ./install.sh --name=v2              # Parallel install as a separate instance
-./install.sh --name=v2 --port=8082  # Parallel install with a specific portal port
+./install.sh --name=v2 --port=8082  # Parallel install with specific portal port
 ```
 
-### Parallel installs
+### Parallel Installs
 
 Use `--name` to run multiple instances side by side. Each gets its own VM, workspace, menu bar app, and portal port:
 
 ```bash
-# Install a second instance for testing
 ./install.sh --name=v2
 
-# Everything is isolated:
+# Creates:
 #   VM:        pai-v2
 #   Workspace: ~/pai-workspace-v2/
 #   App:       PAI-Status-v2.app
@@ -61,63 +144,6 @@ All scripts accept `--name` to target a specific instance:
 ./scripts/uninstall.sh --name=v2
 ```
 
-The default instance (no `--name`) is unaffected.
-
-## Using PAI
-
-After install, **PAI-Status appears in your menu bar** (top right). This is your control center.
-
-### First time
-
-1. Click the **PAI icon** in your menu bar
-2. Click **New PAI Session** — a terminal window opens
-3. Run `claude` and sign in with your Anthropic account
-4. You're in. Start talking to Claude.
-
-### From then on
-
-Click the PAI icon and choose what you need:
-
-```
-● PAI                          <- green = running, red = stopped
-|- VM: Running
-|- Start VM / Stop VM
-|- --------------------------
-|- New PAI Session...          <- start a new AI workspace
-|- Active Sessions
-|   '- Resume Session...      <- pick up where you left off
-|- --------------------------
-|- Open PAI Web                <- web portal and dashboards
-|- Open a Terminal             <- plain shell (no AI)
-|- --------------------------
-|- Launch at Login             <- start PAI-Status automatically
-'- Quit PAI-Status
-```
-
-**Tip:** Check **Launch at Login** so PAI-Status is always ready when you open your Mac. The VM doesn't auto-start — you still click Start VM when you're ready to work.
-
-## Shared Files
-
-Your Mac and the AI sandbox share files through `~/pai-workspace/`:
-
-```
-~/pai-workspace/
-|- exchange/    Drop files here -- the AI reads them at ~/exchange/
-|- work/        AI outputs and projects appear here
-|- data/        Datasets, databases
-|- portal/      Web portal files
-|- claude-home/ AI configuration (settings, memory, sessions)
-'- upstream/    Reference repos
-```
-
-Your data lives on your Mac, not inside the VM. You can destroy and recreate the VM without losing anything.
-
----
-
-## Advanced
-
-Everything below is for users who want to understand the internals, customize the setup, or use CLI tools instead of the menu bar app.
-
 ### CLI Fallback
 
 If you prefer the terminal over the menu bar:
@@ -126,19 +152,12 @@ If you prefer the terminal over the menu bar:
 ./scripts/launch.sh              # New PAI session
 ./scripts/launch.sh --resume     # Resume a previous session
 ./scripts/launch.sh --shell      # Plain shell in the VM
-./scripts/launch.sh --name=v2    # Target a named instance
 ```
 
 ### Verification
 
-Run `./scripts/verify.sh` anytime to check system health:
-
-- **PASS** — component is installed and working
-- **FAIL** — component missing or broken
-
 ```bash
-./scripts/verify.sh              # Check default instance
-./scripts/verify.sh --name=v2    # Check a named instance
+./scripts/verify.sh              # Check system health (PASS/FAIL for each component)
 ```
 
 ### Upgrading
@@ -147,7 +166,6 @@ Run `./scripts/verify.sh` anytime to check system health:
 cd pai-lima
 git pull
 ./scripts/upgrade.sh
-./scripts/upgrade.sh --name=v2   # Upgrade a named instance
 ```
 
 Your workspace, authentication, and sessions are preserved.
@@ -155,25 +173,17 @@ Your workspace, authentication, and sessions are preserved.
 ### Backup & Restore
 
 ```bash
-./scripts/backup-restore.sh backup              # Back up default instance
-./scripts/backup-restore.sh backup --name=v2    # Back up a named instance
-./scripts/backup-restore.sh restore             # Restore from a backup
+./scripts/backup-restore.sh backup     # Back up VM + workspace
+./scripts/backup-restore.sh restore    # Restore from a backup
 ```
 
 ### Uninstall
 
 ```bash
-./scripts/uninstall.sh              # Remove default instance
-./scripts/uninstall.sh --name=v2    # Remove a named instance
+./scripts/uninstall.sh
 ```
 
-Removes the VM, menu bar app, and launch agents. Asks before touching workspace data.
-
-### PAI Companion (Web Portal)
-
-After authenticating Claude Code, open a session and ask:
-
-> Install PAI Companion following ~/pai-companion/companion/INSTALL.md. Skip Docker (use Bun directly) and skip the voice module.
+Removes the VM, menu bar app, and launch agents. Asks before deleting workspace data.
 
 ### VM Specs
 
@@ -186,7 +196,7 @@ After authenticating Claude Code, open a session and ask:
 | Disk | 50 GB |
 | Audio | VirtIO sound device |
 
-To resize an existing VM:
+To resize:
 
 ```bash
 limactl stop pai
@@ -194,50 +204,19 @@ limactl edit pai --cpus 6 --memory 6
 limactl start pai
 ```
 
-For a named instance, replace `pai` with the instance name (e.g., `pai-v2`).
-
-Edit `pai.yaml` before running `./install.sh` to change defaults for new installs.
-
-### Project Structure
-
-```
-pai-lima/
-|- install.sh               The installer (run this)
-|- pai.yaml                 VM configuration template
-|- scripts/
-|  |- common.sh             Shared instance config (--name, --port parsing)
-|  |- provision-vm.sh       VM provisioning (called by installer)
-|  |- verify.sh             System health check
-|  |- launch.sh             CLI: open a PAI session
-|  |- session.sh            Alias for launch.sh
-|  |- upgrade.sh            Upgrade existing install
-|  |- uninstall.sh          Remove everything
-|  '- backup-restore.sh     Backup and restore
-|- config/
-|  |- kitty.conf            Terminal configuration
-|  '- portal.webloc         Portal bookmark template
-|- menubar/
-|  |- PAIStatus.swift       Menu bar app source
-|  |- build.sh              Compile script
-|  '- Info.plist            App metadata
-'- README.md
-```
-
 ### Troubleshooting
 
-**Install fails at "Creating sandbox VM"** — Run `limactl delete pai --force` and re-run `./install.sh`. For named instances, use `limactl delete pai-NAME --force`.
+**Install fails at "Creating sandbox VM"** -- Run `limactl delete pai --force` then `./install.sh` again.
 
-**PAI-Status not in menu bar** — Run `open /Applications/PAI-Status.app` or rebuild: `cd menubar && ./build.sh --install`.
+**PAI-Status not in menu bar** -- Run `open /Applications/PAI-Status.app`.
 
-**No audio** — Inside the VM: `sudo modprobe virtio_snd`.
+**No audio** -- Open a terminal in the VM and run `sudo modprobe virtio_snd`.
 
-**Shared folders not visible** — Run `mkdir -p ~/pai-workspace/{claude-home,data,exchange,portal,upstream,work}`.
-
-**Port conflict with named instance** — Use `--port=N` to pick a specific port: `./install.sh --name=v2 --port=8082`.
+**Web portal not loading** -- Make sure the VM is running (green dot in menu bar), then try http://localhost:8080.
 
 ## Credits
 
-- [Lima](https://lima-vm.io/) — Linux VMs on macOS
-- [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure) — Personal AI Infrastructure by Daniel Miessler
-- [PAI Companion](https://github.com/chriscantey/pai-companion) — Companion package by Chris Cantey
-- [kitty](https://sw.kovidgoyal.net/kitty/) — GPU-accelerated terminal emulator
+- [Lima](https://lima-vm.io/) -- Linux VMs on macOS
+- [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure) -- Personal AI Infrastructure by Daniel Miessler
+- [PAI Companion](https://github.com/chriscantey/pai-companion) -- Companion package by Chris Cantey
+- [kitty](https://sw.kovidgoyal.net/kitty/) -- GPU-accelerated terminal emulator
