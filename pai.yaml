@@ -106,3 +106,4 @@ provision:
       # Enable and start PulseAudio
       systemctl daemon-reload
       systemctl enable pulseaudio.service
+      systemctl start pulseaudio.service || true

@@ -217,6 +217,9 @@ export PATH="$HOME/.npm-global/bin:$PATH"
 # Terminal — kitty-terminfo is installed in the VM
 export TERM=xterm-kitty
 
+# Audio — PulseAudio system-wide socket
+export PULSE_SERVER=unix:/run/pulse/native
+
 # Default editor
 export EDITOR=nano
 
@@ -283,6 +286,25 @@ else
   fi
 
   log "PAI installed"
+fi
+
+# Patch VoiceServer for Linux: add espeak-ng/ffplay fallback when no ElevenLabs key
+VOICE_SERVER="$HOME/.claude/VoiceServer/server.ts"
+if [ -f "$VOICE_SERVER" ]; then
+  # Add local TTS fallback after the "ElevenLabs API key not configured" throw.
+  # The patch replaces the throw with a call to espeak-ng via the 'say' shim.
+  if grep -q "throw new Error('ElevenLabs API key not configured')" "$VOICE_SERVER"; then
+    sed -i "s|throw new Error('ElevenLabs API key not configured');|// On Linux without ElevenLabs, use local TTS via say shim (espeak-ng/Kokoro)\n    if (process.platform === 'linux') {\n      const { execSync } = require('child_process');\n      try {\n        execSync(\`PULSE_SERVER=unix:/run/pulse/native say \${JSON.stringify(text)}\`, { timeout: 15000 });\n        return new ArrayBuffer(0); // empty buffer signals local playback handled\n      } catch { }\n    }\n    throw new Error('ElevenLabs API key not configured');|" "$VOICE_SERVER"
+    log "VoiceServer patched with Linux TTS fallback (espeak-ng)"
+  else
+    log "VoiceServer already patched or has different structure — skipping"
+  fi
+
+  # Also patch playAudio to skip playback when buffer is empty (local TTS already played)
+  if grep -q "await Bun.write(tempFile, audioBuffer);" "$VOICE_SERVER" && ! grep -q "audioBuffer.byteLength === 0" "$VOICE_SERVER"; then
+    sed -i "s|await Bun.write(tempFile, audioBuffer);|if (audioBuffer.byteLength === 0) return; // local TTS already played audio\n  await Bun.write(tempFile, audioBuffer);|" "$VOICE_SERVER"
+    log "VoiceServer playAudio patched for local TTS bypass"
+  fi
 fi
 
 source ~/.bashrc 2>/dev/null || true
@@ -396,10 +418,5 @@ log "PAI:          ~/.claude/"
 log "Companion:    ~/pai-companion/ (ready for Claude to install)"
 log "Log:          $LOG_FILE"
 echo ""
-warn "Next steps:"
-warn "  1. Run 'claude' and sign in with your Anthropic account"
-warn "  2. Ask Claude to install PAI Companion:"
-warn "     \"Install PAI Companion following ~/pai-companion/companion/INSTALL.md."
-warn "      Skip Docker (use Bun directly) and skip the voice module.\""
-warn "  3. Start using PAI: source ~/.bashrc && pai"
+warn "Next steps — follow the instructions shown by the installer on your Mac."
 echo ""

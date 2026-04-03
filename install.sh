@@ -19,6 +19,10 @@
 
 set -euo pipefail
 
+# Use a safe TERM for install output — kitty/xterm-kitty can cause
+# garbled output when viewed in Terminal.app or other basic terminals
+export TERM=xterm-256color
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Source shared instance configuration (sets VM_NAME, WORKSPACE, PORTAL_PORT, etc.)
@@ -99,6 +103,9 @@ echo "  VM name:     $VM_NAME"
 echo "  Workspace:   $WORKSPACE"
 echo "  Portal port: $PORTAL_PORT"
 echo "  Log:         $LOG_FILE"
+echo ""
+echo -e "${BOLD}${YELLOW}  NOTE: You will see a lot of installation output.${NC}"
+echo -e "${BOLD}${YELLOW}  Ignore it all until you see the final instructions.${NC}"
 echo ""
 
 # Initialize log
@@ -291,24 +298,34 @@ ok "Verification complete"
 # ─── Done ─────────────────────────────────────────────────────
 
 echo ""
-echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN}  Setup complete!${NC}"
-echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${GREEN}●${NC} Look for ${APP_NAME} in your menu bar (top right)"
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${GREEN}  SETUP COMPLETE — READ THESE INSTRUCTIONS${NC}"
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "  Getting started:"
-echo "    1. Click the PAI icon in your menu bar"
-echo "    2. Click \"New PAI Session\" to open a terminal"
-echo "    3. Sign in with your Anthropic account when prompted"
-echo "    4. Optional: click \"Launch at Login\" so ${APP_NAME}"
-echo "       starts automatically when you log in"
+echo "  Follow these steps in order:"
 echo ""
-echo "  ${APP_NAME} is your control center:"
-echo "    New PAI Session     Open a new AI workspace"
-echo "    Resume Session      Pick up where you left off"
-echo "    Start/Stop VM       Control the sandbox"
-echo "    Open PAI Web        Open the web portal"
+echo "  1. Look at the top-right of your screen for the ${APP_NAME} icon"
+echo ""
+echo "  2. Click it, then click \"New PAI Session\""
+echo "     A terminal window will open."
+echo ""
+echo "  3. Sign in with your Anthropic account"
+echo "     It will open a browser for you to log in."
+echo "     When it asks if you trust /home/claude/.claude, say yes."
+echo ""
+echo "  4. Once signed in, paste this message into the terminal:"
+echo ""
+echo -e "     ${CYAN}Install PAI Companion following ~/pai-companion/companion/INSTALL.md.${NC}"
+echo -e "     ${CYAN}Skip Docker (use Bun directly for the portal) and skip the voice${NC}"
+echo -e "     ${CYAN}module. Keep ~/.vm-ip set to localhost and VM_IP=localhost in .env.${NC}"
+echo -e "     ${CYAN}After installation, verify the portal is running at localhost:${PORTAL_PORT}${NC}"
+echo -e "     ${CYAN}and verify the voice server is working. Set both to start on boot.${NC}"
+echo ""
+echo "  5. Optional: click \"Launch at Login\" in the ${APP_NAME} menu"
+echo "     so it starts automatically when you open your Mac."
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "  Install log: $LOG_FILE"
 echo "  Shared files: $WORKSPACE/"
