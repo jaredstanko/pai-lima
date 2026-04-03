@@ -109,7 +109,8 @@ if [ "$CLAUDE_NEEDS_INSTALL" = true ]; then
   log "Claude Code installed"
 fi
 
-export PATH="$HOME/.claude/bin:$PATH"
+# Claude Code may install to ~/.claude/bin or ~/.local/bin depending on version
+export PATH="$HOME/.claude/bin:$HOME/.local/bin:$PATH"
 
 # Verify
 if command -v claude &>/dev/null; then
