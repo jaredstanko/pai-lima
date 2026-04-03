@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/scripts/common.sh" "$@" --needs-port
 
 STEP=0
-TOTAL=10
+TOTAL=8
 VERBOSE=false
 
 # Parse additional flags (--name and --port already consumed by common.sh)
@@ -220,7 +220,7 @@ if [ -n "$VM_STATUS" ]; then
   fi
 else
   echo "        Creating VM from pai.yaml (this takes 3-5 minutes)..."
-  limactl create --name="$VM_NAME" "$GENERATED_YAML"
+  limactl create --tty=false --name="$VM_NAME" "$GENERATED_YAML"
   limactl start "$VM_NAME"
   ok "VM '$VM_NAME' created and started (4 CPU, 4 GB RAM, 50 GB disk)"
 fi
@@ -228,39 +228,7 @@ fi
 # Clean up generated yaml
 rm -f "$GENERATED_YAML"
 
-# ─── Step 5: Reboot VM and verify audio ──────────────────────
-
-step "Checking sound kernel modules..."
-
-# Only reboot if virtio_snd is not loaded (first run)
-if limactl shell "$VM_NAME" lsmod 2>/dev/null | grep -q virtio_snd; then
-  skip "Sound modules already loaded"
-else
-  echo "        Rebooting VM to load sound kernel modules..."
-  limactl stop "$VM_NAME"
-  ok "VM stopped"
-  limactl start "$VM_NAME"
-  ok "VM restarted"
-fi
-
-# Wait for PulseAudio to come up
-sleep 3
-
-echo "        Playing test sound inside VM..."
-limactl shell "$VM_NAME" bash -c 'PULSE_SERVER=unix:/run/pulse/native timeout 2 speaker-test -t sine -f 440 -l 1 >/dev/null 2>&1 || true'
-
-echo ""
-echo -e "        ${YELLOW}▸ Did you hear a tone from your Mac speakers? [y/N]${NC}"
-read -r HEARD_SOUND
-
-if [[ "$HEARD_SOUND" =~ ^[Yy] ]]; then
-  ok "Audio passthrough confirmed"
-else
-  echo -e "        ${YELLOW}⊘${NC} Audio not heard — this is non-blocking, continuing setup."
-  echo -e "        ${YELLOW}→${NC} Troubleshoot later: limactl shell $VM_NAME speaker-test -t sine -f 440 -l 1"
-fi
-
-# ─── Step 6: Provision sandbox ────────────────────────────────
+# ─── Step 5: Provision sandbox ────────────────────────────────
 
 step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
@@ -269,23 +237,13 @@ echo "        This step takes 3-5 minutes on first run."
 limactl cp "$SCRIPT_DIR/scripts/provision-vm.sh" "$VM_NAME":/home/claude/provision-vm.sh
 
 if [ "$VERBOSE" = true ]; then
-  limactl shell "$VM_NAME" bash /home/claude/provision-vm.sh
+  limactl shell --workdir /home/claude "$VM_NAME" bash /home/claude/provision-vm.sh
 else
-  limactl shell "$VM_NAME" bash /home/claude/provision-vm.sh 2>&1 | tee -a "$LOG_FILE"
+  limactl shell --workdir /home/claude "$VM_NAME" bash /home/claude/provision-vm.sh 2>&1 | tee -a "$LOG_FILE"
 fi
 ok "Sandbox provisioned"
 
-# ─── Step 7: Configure terminal keybindings ───────────────────
-
-step "Verifying terminal configuration..."
-
-echo "        kitty keybinding configuration:"
-echo "          - Shift+Enter sends escape sequence for Claude Code multi-line input"
-echo "          - Remote control enabled for PAI-Status integration"
-echo "          - Config installed at ~/.config/kitty/kitty.conf"
-ok "kitty configured (see config/kitty.conf)"
-
-# ─── Step 8: Build and install menu bar app ───────────────────
+# ─── Step 6: Build and install menu bar app ───────────────────
 
 step "Building ${APP_NAME} menu bar app..."
 
@@ -304,7 +262,7 @@ ok "${APP_NAME} running in menu bar"
 
 cd "$SCRIPT_DIR"
 
-# ─── Step 9: Set up browser bookmark ─────────────────────────
+# ─── Step 7: Set up browser bookmark ─────────────────────────
 
 step "Setting up browser bookmarks..."
 
@@ -313,7 +271,7 @@ pai_generate_webloc "$BOOKMARK_DEST"
 ok "Portal bookmark created on Desktop: $(basename "$BOOKMARK_DEST")"
 ok "Portal URL: http://localhost:${PORTAL_PORT}"
 
-# ─── Step 10: Verification & Authentication ──────────────────
+# ─── Step 8: Verification ────────────────────────────────────
 
 step "Final verification..."
 
@@ -341,19 +299,19 @@ echo -e "  ${GREEN}●${NC} Look for ${APP_NAME} in your menu bar (top right)"
 echo ""
 echo "  Getting started:"
 echo "    1. Click the PAI icon in your menu bar"
-echo "    2. Click ${BOLD}New PAI Session${NC} to open a terminal"
-echo "    3. Run 'claude' and authenticate with your API key"
-echo "    4. Optional: click ${BOLD}Launch at Login${NC} so ${APP_NAME}"
+echo "    2. Click \"New PAI Session\" to open a terminal"
+echo "    3. Sign in with your Anthropic account when prompted"
+echo "    4. Optional: click \"Launch at Login\" so ${APP_NAME}"
 echo "       starts automatically when you log in"
 echo ""
-echo "  From now on, ${APP_NAME} is your control center:"
-echo -e "    ${BOLD}New PAI Session${NC}     Open a new AI workspace"
-echo -e "    ${BOLD}Resume Session${NC}      Pick up where you left off"
-echo -e "    ${BOLD}Start/Stop VM${NC}       Control the sandbox"
-echo -e "    ${BOLD}Open PAI Web${NC}        Open the web portal"
+echo "  ${APP_NAME} is your control center:"
+echo "    New PAI Session     Open a new AI workspace"
+echo "    Resume Session      Pick up where you left off"
+echo "    Start/Stop VM       Control the sandbox"
+echo "    Open PAI Web        Open the web portal"
 echo ""
-echo -e "  Install log: $LOG_FILE"
-echo -e "  Shared files: $WORKSPACE/"
+echo "  Install log: $LOG_FILE"
+echo "  Shared files: $WORKSPACE/"
 if [ -n "$INSTANCE_SUFFIX" ]; then
   echo ""
   echo "  All scripts support --name=${_PAI_NAME} to target this instance:"

@@ -65,10 +65,27 @@ export TERM=xterm-256color
 # ─── Step 1: System packages ────────────────────────────────
 step "1/6" "Installing system packages..."
 
+# Add NodeSource repo for Node.js 22 LTS before apt-get update (single update pass)
+NODE_NEEDS_SETUP=false
+if command -v node &>/dev/null && node --version 2>/dev/null | grep -q "^v2[2-9]"; then
+  log "Node.js already installed: $(node --version)"
+else
+  NODE_NEEDS_SETUP=true
+  log "Adding NodeSource repo for Node.js 22 LTS..."
+  sudo mkdir -p /etc/apt/keyrings
+  retry "curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg"
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list > /dev/null
+fi
+
 retry "sudo apt-get update -qq"
 # shellcheck disable=SC2086
-retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree nodejs npm kitty-terminfo"
+retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree kitty-terminfo ca-certificates gnupg"
 log "System packages installed"
+
+if [ "$NODE_NEEDS_SETUP" = true ]; then
+  retry "sudo apt-get install -y -qq nodejs"
+  log "Node.js $(node --version) installed from NodeSource"
+fi
 
 # ─── Step 2: Bun ────────────────────────────────────────────
 step "2/6" "Installing Bun..."
@@ -121,7 +138,7 @@ else
 fi
 
 echo ""
-warn "After setup completes, run 'claude' to authenticate with your API key."
+warn "After setup completes, run 'claude' and sign in with your Anthropic account."
 echo ""
 
 # ─── Step 3b: Shell environment ─────────────────────────────
@@ -235,6 +252,28 @@ VM_IP=$VM_IP
 PORTAL_PORT=8080
 ENVEOF
   log "VM_IP and PORTAL_PORT written to ~/.claude/.env"
+
+  # Pre-trust common workspaces so Claude Code doesn't prompt on first run
+  CLAUDE_JSON="$HOME/.claude.json"
+  if [ ! -f "$CLAUDE_JSON" ]; then
+    cat > "$CLAUDE_JSON" <<TRUSTEOF
+{
+  "projects": {
+    "$HOME/.claude": {
+      "allowedTools": [],
+      "hasTrustDialogAccepted": true
+    },
+    "$HOME": {
+      "allowedTools": [],
+      "hasTrustDialogAccepted": true
+    }
+  }
+}
+TRUSTEOF
+    log "Claude Code workspaces pre-trusted"
+  else
+    log "Claude Code config already exists — skipping trust setup"
+  fi
 else
   warn "$HOME/.claude mount not writable — skipping .env write"
 fi
@@ -308,7 +347,7 @@ log "Companion:    ~/pai-companion/ (ready for Claude to install)"
 log "Log:          $LOG_FILE"
 echo ""
 warn "Next steps:"
-warn "  1. Run 'claude' to authenticate with your Anthropic API key"
+warn "  1. Run 'claude' and sign in with your Anthropic account"
 warn "  2. Ask Claude to install PAI Companion:"
 warn "     \"Install PAI Companion following ~/pai-companion/companion/INSTALL.md."
 warn "      Skip Docker (use Bun directly) and skip the voice module.\""

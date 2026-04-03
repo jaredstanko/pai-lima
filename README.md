@@ -16,7 +16,7 @@ A sandboxed AI workspace running Claude Code in an isolated VM on your Mac. One 
 
 - macOS 13+ (Ventura or later)
 - Apple Silicon (M1/M2/M3/M4)
-- An Anthropic API key for Claude Code
+- An [Anthropic account](https://console.anthropic.com/) for Claude Code
 
 ## Install
 
@@ -71,7 +71,7 @@ After install, **PAI-Status appears in your menu bar** (top right). This is your
 
 1. Click the **PAI icon** in your menu bar
 2. Click **New PAI Session** — a terminal window opens
-3. Run `claude` and enter your Anthropic API key when prompted
+3. Run `claude` and sign in with your Anthropic account
 4. You're in. Start talking to Claude.
 
 ### From then on
