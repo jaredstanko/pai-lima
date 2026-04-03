@@ -2,6 +2,44 @@
 
 A sandboxed AI workspace running Claude Code on your Mac. One script to install, a menu bar app to control it.
 
+## How It Works
+
+```mermaid
+graph TB
+    subgraph mac ["🖥️ Your Mac"]
+        menubar["PAI-Status<br/>(menu bar icon)"]
+        terminal["kitty terminal"]
+        workspace["~/pai-workspace/<br/>Your files live here"]
+        browser["Browser"]
+    end
+
+    subgraph vm ["🐧 Sandbox VM (Ubuntu, runs inside your Mac)"]
+        claude["Claude Code<br/>AI assistant"]
+        pai["PAI<br/>Skills & tools"]
+        portal["Web Portal<br/>localhost:8080"]
+        voice["Voice Server<br/>AI speaks to you"]
+    end
+
+    menubar -- "opens" --> terminal
+    terminal -- "connects to" --> claude
+    workspace <-- "shared folders" --> pai
+    browser -- "localhost:8080" --> portal
+    voice -- "audio passthrough" --> mac
+
+    style mac fill:#f8f8f8,stroke:#333,stroke-width:2px
+    style vm fill:#e8f4e8,stroke:#4a4,stroke-width:2px
+    style menubar fill:#fff,stroke:#666
+    style terminal fill:#fff,stroke:#666
+    style workspace fill:#fff,stroke:#666
+    style browser fill:#fff,stroke:#666
+    style claude fill:#fff,stroke:#4a4
+    style pai fill:#fff,stroke:#4a4
+    style portal fill:#fff,stroke:#4a4
+    style voice fill:#fff,stroke:#4a4
+```
+
+**The key idea:** Your AI runs in a sandbox (a mini Linux computer inside your Mac). Your files stay on your Mac in `~/pai-workspace/`. The AI can read and write to those files, but it can't touch anything else on your Mac.
+
 ## What You Need
 
 - A Mac with Apple Silicon (M1, M2, M3, or M4)
