@@ -3,7 +3,7 @@
 # Single entry point: installs all prerequisites, creates the VM,
 # provisions it, builds the menu bar app, and sets up browser bookmarks.
 #
-# All dependency versions are pinned in versions.env (single source of truth).
+# Tools are installed at their latest versions. The Ubuntu VM image is pinned in pai.yaml.
 # This script is idempotent — safe to re-run if interrupted.
 #
 # Usage:
@@ -27,6 +27,7 @@ LOG_FILE="$HOME/.pai-install.log"
 for arg in "$@"; do
   case "$arg" in
     --verbose|-v) VERBOSE=true ;;
+    *) ;;
   esac
 done
 
@@ -75,16 +76,6 @@ retry() {
   return 1
 }
 
-# ─── Load version manifest ───────────────────────────────────
-
-VERSIONS_FILE="$SCRIPT_DIR/versions.env"
-if [ ! -f "$VERSIONS_FILE" ]; then
-  echo -e "${RED}✗${NC} versions.env not found in $SCRIPT_DIR"
-  echo -e "${YELLOW}→${NC} This file is required. Re-clone the repo or restore it."
-  exit 1
-fi
-source "$VERSIONS_FILE"
-
 # ─── Banner ───────────────────────────────────────────────────
 
 echo ""
@@ -94,11 +85,6 @@ echo -e "${BOLD}${CYAN}═══════════════════
 echo ""
 echo "  This will set up a sandboxed AI workspace on your Mac."
 echo "  Estimated time: 5-10 minutes (first run)."
-echo ""
-echo "  Pinned versions (from versions.env):"
-echo "    Bun:         ${BUN_VERSION}"
-echo "    Claude Code: ${CLAUDE_CODE_VERSION}"
-echo "    Playwright:  ${PLAYWRIGHT_VERSION}"
 echo ""
 echo "  Log: $LOG_FILE"
 echo ""
@@ -249,8 +235,7 @@ fi
 step "Provisioning sandbox (installs Claude Code, PAI, tools)..."
 echo "        This step takes 3-5 minutes on first run."
 
-# Copy versions.env and provision script to VM
-limactl cp "$SCRIPT_DIR/versions.env" pai:/home/claude/versions.env
+# Copy provision script to VM
 limactl cp "$SCRIPT_DIR/scripts/provision-vm.sh" pai:/home/claude/provision-vm.sh
 
 if [ "$VERBOSE" = true ]; then

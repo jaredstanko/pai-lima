@@ -27,8 +27,6 @@ cd pai-lima
 
 That's it. The installer handles everything: tools, VM, provisioning, and the menu bar app. Takes about 5-10 minutes on a fresh machine.
 
-The install is **deterministic** — every dependency version is pinned in `versions.env`, so you get the same result every time, on every machine.
-
 ### Install options
 
 ```bash
@@ -101,26 +99,12 @@ If you prefer the terminal over the menu bar:
 ./scripts/launch.sh --shell      # Plain shell in the VM
 ```
 
-### Version Pinning
-
-All dependency versions are declared in `versions.env`:
-
-```bash
-BUN_VERSION="1.3.11"
-CLAUDE_CODE_VERSION="2.1.89"
-PLAYWRIGHT_VERSION="1.59.0"
-# ... plus Ubuntu image URL, PAI repo commit, apt packages
-```
-
-To update versions, edit `versions.env` and re-run `./install.sh`.
-
 ### Verification
 
 Run `./scripts/verify.sh` anytime to check system health:
 
-- **PINNED** — version matches the manifest exactly
-- **DRIFTED** — installed but version differs (e.g., Claude Code auto-updated)
-- **FAILED** — component missing or broken
+- **PASS** — component is installed and working
+- **FAIL** — component missing or broken
 
 ### Upgrading
 
@@ -179,7 +163,6 @@ Edit `pai.yaml` before running `./install.sh` to change defaults for new install
 ```
 pai-lima/
 ├─ install.sh               The installer (run this)
-├─ versions.env             Pinned dependency versions
 ├─ pai.yaml                 VM configuration
 ├─ scripts/
 │  ├─ provision-vm.sh       VM provisioning (called by installer)

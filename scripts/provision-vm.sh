@@ -1,9 +1,8 @@
 #!/bin/bash
-# PAI Provisioning Script — Deterministic VM Setup
+# PAI Provisioning Script — VM Setup
 # Run this INSIDE the Lima VM as the 'claude' user.
 # Called automatically by install.sh on the Mac.
 #
-# All versions are sourced from versions.env (single source of truth).
 # This script is idempotent — safe to re-run if interrupted.
 #
 # Usage:
@@ -31,7 +30,7 @@ retry() {
   local max_attempts=3
   local delay=5
   local attempt=1
-  local cmd="$@"
+  local cmd="$*"
 
   while [ $attempt -le $max_attempts ]; do
     if eval "$cmd"; then
@@ -48,66 +47,46 @@ retry() {
   return 1
 }
 
-# ─── Load version manifest ──────────────────────────────────
-VERSIONS_FILE="$HOME/versions.env"
-if [ ! -f "$VERSIONS_FILE" ]; then
-  err "versions.env not found at $VERSIONS_FILE"
-  err "This file should be copied by install.sh before running provision."
-  exit 1
-fi
-source "$VERSIONS_FILE"
+# ─── Constants ───────────────────────────────────────────────
+PAI_REPO="https://github.com/danielmiessler/PAI.git"
+PAI_COMPANION_REPO="https://github.com/chriscantey/pai-companion.git"
 
 echo -e "${BOLD}"
 echo "============================================"
-echo "  PAI Provisioning (Deterministic)"
+echo "  PAI Provisioning"
 echo "============================================"
 echo -e "${NC}"
-echo "  Versions from manifest:"
-echo "    Bun:         ${BUN_VERSION}"
-echo "    Claude Code: ${CLAUDE_CODE_VERSION}"
-echo "    Playwright:  ${PLAYWRIGHT_VERSION}"
-echo ""
+
+# Use a safe TERM for installation — xterm-kitty can cause installers
+# to hang when run via limactl shell (not a real kitty terminal).
+# The shell env block below sets xterm-kitty for interactive use.
+export TERM=xterm-256color
 
 # ─── Step 1: System packages ────────────────────────────────
 step "1/6" "Installing system packages..."
 
 retry "sudo apt-get update -qq"
 # shellcheck disable=SC2086
-retry "sudo apt-get install -y -qq $APT_PACKAGES"
+retry "sudo apt-get install -y -qq jq fzf ripgrep fd-find sqlite3 tmux bat yt-dlp ffmpeg curl wget imagemagick nmap whois dnsutils net-tools traceroute mtr texlive-latex-base texlive-fonts-recommended pandoc golang-go python3 python3-pip python3-venv build-essential git zip tree nodejs npm kitty-terminfo"
 log "System packages installed"
 
 # ─── Step 2: Bun ────────────────────────────────────────────
-step "2/6" "Installing Bun ${BUN_VERSION}..."
+step "2/6" "Installing Bun..."
 
-CURRENT_BUN=""
 if command -v bun &>/dev/null; then
-  CURRENT_BUN=$(bun --version 2>/dev/null || echo "")
-fi
-
-if [ "$CURRENT_BUN" = "$BUN_VERSION" ]; then
-  log "Bun already at pinned version ${BUN_VERSION}"
+  log "Bun already installed: $(bun --version)"
 else
-  if [ -n "$CURRENT_BUN" ]; then
-    warn "Bun ${CURRENT_BUN} installed, upgrading to ${BUN_VERSION}..."
-  fi
-  retry "curl -fsSL https://bun.sh/install | bash -s 'bun-v${BUN_VERSION}'"
+  retry "curl -fsSL https://bun.sh/install | bash"
   source ~/.bashrc 2>/dev/null || true
-  log "Bun ${BUN_VERSION} installed"
+  log "Bun installed"
 fi
 
 # Ensure bun is on PATH for the rest of this script
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-# Verify
-INSTALLED_BUN=$(bun --version 2>/dev/null || echo "MISSING")
-if [ "$INSTALLED_BUN" != "$BUN_VERSION" ]; then
-  err "Bun version mismatch: expected ${BUN_VERSION}, got ${INSTALLED_BUN}"
-  exit 1
-fi
-
 # ─── Step 3: Claude Code ────────────────────────────────────
-step "3/6" "Installing Claude Code ${CLAUDE_CODE_VERSION}..."
+step "3/6" "Installing Claude Code..."
 
 # Detect and remove old npm-based installs
 CLAUDE_NEEDS_INSTALL=false
@@ -119,31 +98,22 @@ if command -v claude &>/dev/null; then
     bun remove -g @anthropic-ai/claude-code 2>/dev/null || true
     CLAUDE_NEEDS_INSTALL=true
   else
-    CURRENT_CLAUDE=$(claude --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "")
-    if [ "$CURRENT_CLAUDE" = "$CLAUDE_CODE_VERSION" ]; then
-      log "Claude Code already at pinned version ${CLAUDE_CODE_VERSION}"
-    else
-      warn "Claude Code ${CURRENT_CLAUDE} installed, upgrading to ${CLAUDE_CODE_VERSION}..."
-      CLAUDE_NEEDS_INSTALL=true
-    fi
+    log "Claude Code already installed (native): $(claude --version 2>/dev/null || echo 'installed')"
   fi
 else
   CLAUDE_NEEDS_INSTALL=true
 fi
 
 if [ "$CLAUDE_NEEDS_INSTALL" = true ]; then
-  retry "curl -fsSL https://claude.ai/install.sh | bash -s -- -y ${CLAUDE_CODE_VERSION}"
-  log "Claude Code ${CLAUDE_CODE_VERSION} installed"
+  retry "curl -fsSL https://claude.ai/install.sh | bash"
+  log "Claude Code installed"
 fi
 
 export PATH="$HOME/.claude/bin:$PATH"
 
-# Verify (allow drift — Claude Code may auto-update)
-INSTALLED_CLAUDE=$(claude --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "MISSING")
-if [ "$INSTALLED_CLAUDE" = "$CLAUDE_CODE_VERSION" ]; then
-  log "Claude Code version verified: ${INSTALLED_CLAUDE}"
-elif [ "$INSTALLED_CLAUDE" != "MISSING" ]; then
-  warn "Claude Code drifted: expected ${CLAUDE_CODE_VERSION}, got ${INSTALLED_CLAUDE} (auto-update)"
+# Verify
+if command -v claude &>/dev/null; then
+  log "Claude Code verified: $(claude --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo 'present')"
 else
   err "Claude Code not found after install"
   exit 1
@@ -205,7 +175,6 @@ if ! npm config get prefix 2>/dev/null | grep -q '.npm-global'; then
 fi
 
 export PATH="$HOME/.claude/bin:$HOME/.local/bin:$HOME/go/bin:$HOME/.npm-global/bin:$PATH"
-export TERM=xterm-kitty
 
 # ─── Step 4: PAI ────────────────────────────────────────────
 step "4/6" "Installing PAI..."
@@ -218,12 +187,6 @@ else
   rm -rf PAI
   retry "git clone '${PAI_REPO}'"
   cd PAI
-
-  # Pin to specific commit if configured
-  if [ "$PAI_COMMIT" != "HEAD" ]; then
-    git checkout "$PAI_COMMIT"
-    log "Checked out PAI commit: ${PAI_COMMIT}"
-  fi
 
   LATEST_RELEASE=$(ls Releases/ | sort -V | tail -1)
   log "Using PAI release: $LATEST_RELEASE"
@@ -272,7 +235,7 @@ PORTAL_PORT=8080
 ENVEOF
   log "VM_IP and PORTAL_PORT written to ~/.claude/.env"
 else
-  warn "~/.claude mount not writable — skipping .env write"
+  warn "$HOME/.claude mount not writable — skipping .env write"
 fi
 
 # ─── Step 5: PAI Companion ──────────────────────────────────
@@ -284,13 +247,6 @@ else
   cd /tmp
   rm -rf pai-companion
   if retry "git clone '${PAI_COMPANION_REPO}'"; then
-    # Pin to specific commit if configured
-    if [ "$PAI_COMPANION_COMMIT" != "HEAD" ]; then
-      cd pai-companion
-      git checkout "$PAI_COMPANION_COMMIT"
-      cd /tmp
-      log "Checked out PAI Companion commit: ${PAI_COMPANION_COMMIT}"
-    fi
     rm -rf "$HOME/pai-companion"
     cp -r /tmp/pai-companion "$HOME/pai-companion"
     rm -rf /tmp/pai-companion
@@ -301,16 +257,16 @@ else
 fi
 
 # ─── Step 6: Playwright ─────────────────────────────────────
-step "6/6" "Installing Playwright ${PLAYWRIGHT_VERSION}..."
+step "6/6" "Installing Playwright..."
 
 if command -v bun &>/dev/null; then
   cd /tmp
   mkdir -p playwright-setup && cd playwright-setup
   bun init -y 2>/dev/null || true
-  bun add "playwright@${PLAYWRIGHT_VERSION}" 2>/dev/null || true
+  bun add playwright 2>/dev/null || true
   retry "bunx playwright install --with-deps chromium" || warn "Playwright install may need manual completion."
   cd /tmp && rm -rf playwright-setup
-  log "Playwright ${PLAYWRIGHT_VERSION} installed"
+  log "Playwright installed"
 else
   warn "Bun not found. Skipping Playwright."
 fi

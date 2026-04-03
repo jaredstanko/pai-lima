@@ -1,7 +1,7 @@
 #!/bin/bash
 # PAI Lima — End-State Verification
-# Checks that the full system matches the expected state from versions.env.
-# Uses 3-state model: PINNED (exact match), DRIFTED (acceptable), FAILED (blocking).
+# Checks that the full system is installed and functional.
+# Uses 2-state model: PASS (present and working), FAIL (missing or broken).
 #
 # Can be run standalone or called by install.sh at the end of install.
 #
@@ -16,71 +16,35 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 BOLD='\033[1m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 RED='\033[0;31m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
 PASS=0
-DRIFT=0
 FAIL=0
-
-# ─── Load version manifest ───────────────────────────────────
-
-VERSIONS_FILE="$SCRIPT_DIR/versions.env"
-if [ ! -f "$VERSIONS_FILE" ]; then
-  echo -e "${RED}✗${NC} versions.env not found in $SCRIPT_DIR"
-  exit 1
-fi
-source "$VERSIONS_FILE"
 
 # ─── Helpers ─────────────────────────────────────────────────
 
-pinned() {
+passed() {
   local label="$1"
   local detail="${2:-}"
   if [ -n "$detail" ]; then
-    printf "  ${GREEN}%-8s${NC} %-40s %s\n" "PINNED" "$label" "$detail"
+    printf "  ${GREEN}%-8s${NC} %-40s %s\n" "PASS" "$label" "$detail"
   else
-    printf "  ${GREEN}%-8s${NC} %s\n" "PINNED" "$label"
+    printf "  ${GREEN}%-8s${NC} %s\n" "PASS" "$label"
   fi
   PASS=$((PASS + 1))
-}
-
-drifted() {
-  local label="$1"
-  local detail="${2:-}"
-  if [ -n "$detail" ]; then
-    printf "  ${YELLOW}%-8s${NC} %-40s %s\n" "DRIFTED" "$label" "$detail"
-  else
-    printf "  ${YELLOW}%-8s${NC} %s\n" "DRIFTED" "$label"
-  fi
-  DRIFT=$((DRIFT + 1))
 }
 
 failed() {
   local label="$1"
   local detail="${2:-}"
   if [ -n "$detail" ]; then
-    printf "  ${RED}%-8s${NC} %-40s %s\n" "FAILED" "$label" "$detail"
+    printf "  ${RED}%-8s${NC} %-40s %s\n" "FAIL" "$label" "$detail"
   else
-    printf "  ${RED}%-8s${NC} %s\n" "FAILED" "$label"
+    printf "  ${RED}%-8s${NC} %s\n" "FAIL" "$label"
   fi
   FAIL=$((FAIL + 1))
-}
-
-check_version() {
-  local label="$1"
-  local expected="$2"
-  local actual="$3"
-
-  if [ -z "$actual" ] || [ "$actual" = "MISSING" ]; then
-    failed "$label" "(not installed)"
-  elif [ "$actual" = "$expected" ]; then
-    pinned "$label" "($actual)"
-  else
-    drifted "$label" "(expected: $expected, got: $actual)"
-  fi
 }
 
 check_exists() {
@@ -88,7 +52,7 @@ check_exists() {
   local path="$2"
 
   if [ -e "$path" ]; then
-    pinned "$label"
+    passed "$label"
   else
     failed "$label" "(not found: $path)"
   fi
@@ -99,9 +63,20 @@ check_command() {
   local cmd="$2"
 
   if command -v "$cmd" &>/dev/null; then
-    pinned "$label"
+    passed "$label"
   else
     failed "$label" "($cmd not in PATH)"
+  fi
+}
+
+check_installed() {
+  local label="$1"
+  local actual="$2"
+
+  if [ -n "$actual" ] && [ "$actual" != "MISSING" ]; then
+    passed "$label" "($actual)"
+  else
+    failed "$label"
   fi
 }
 
@@ -111,8 +86,6 @@ echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  PAI Lima — System Verification${NC}"
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
-echo ""
-echo "  Checking against versions.env manifest..."
 echo ""
 
 # ═══════════════════════════════════════════════════════════════
@@ -124,14 +97,14 @@ echo -e "  ───────────────────────
 
 # macOS
 if [[ "$(uname)" = "Darwin" ]]; then
-  pinned "macOS" "($(sw_vers -productVersion))"
+  passed "macOS" "($(sw_vers -productVersion))"
 else
   failed "macOS" "(not macOS)"
 fi
 
 # Apple Silicon
 if [[ "$(uname -m)" = "arm64" ]]; then
-  pinned "Apple Silicon"
+  passed "Apple Silicon"
 else
   failed "Apple Silicon" "($(uname -m))"
 fi
@@ -142,14 +115,14 @@ check_command "Homebrew" "brew"
 # Lima
 if command -v limactl &>/dev/null; then
   LIMA_VER=$(limactl --version 2>/dev/null | grep -oE '[0-9.]+' | head -1 || echo "unknown")
-  pinned "Lima" "($LIMA_VER)"
+  passed "Lima" "($LIMA_VER)"
 else
   failed "Lima" "(limactl not found)"
 fi
 
 # kitty
 if [ -d "/Applications/kitty.app" ] || command -v kitty &>/dev/null; then
-  pinned "kitty terminal"
+  passed "kitty terminal"
 else
   failed "kitty terminal"
 fi
@@ -170,7 +143,7 @@ for dir in claude-home data exchange portal work upstream; do
   fi
 done
 if [ "$WORKSPACE_OK" = true ]; then
-  pinned "Workspace directories (6/6)"
+  passed "Workspace directories (6/6)"
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -190,23 +163,23 @@ if ! echo "$VM_JSON" | grep -q '"name":"pai"'; then
 else
   VM_STATUS=$(echo "$VM_JSON" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
   if [ "$VM_STATUS" = "Running" ]; then
-    pinned "Lima VM 'pai'" "(running)"
+    passed "Lima VM 'pai'" "(running)"
   else
-    drifted "Lima VM 'pai'" "(status: $VM_STATUS, expected: Running)"
+    failed "Lima VM 'pai'" "(status: $VM_STATUS, expected: Running)"
   fi
 
   if [ "$VM_STATUS" = "Running" ]; then
     # Batch all VM checks into a single SSH session for speed
     VM_CHECK_SCRIPT='
-      echo "BUN_VER=$(bun --version 2>/dev/null || echo MISSING)"
-      echo "CLAUDE_VER=$(claude --version 2>/dev/null | grep -oE "[0-9.]+" | head -1 || echo MISSING)"
-      echo "NODE_VER=$(node --version 2>/dev/null || echo MISSING)"
+      echo "BUN_VER=$(command -v bun >/dev/null 2>&1 && bun --version 2>/dev/null || echo MISSING)"
+      echo "CLAUDE_VER=$(command -v claude >/dev/null 2>&1 && claude --version 2>/dev/null | grep -oE "[0-9.]+" | head -1 || echo MISSING)"
+      echo "NODE_VER=$(command -v node >/dev/null 2>&1 && node --version 2>/dev/null || echo MISSING)"
       echo "PAI_DIR=$(test -d /home/claude/.claude/PAI && echo YES || echo NO)"
       echo "PAI_LINK=$(test -L /home/claude/.claude/skills/PAI && echo YES || echo NO)"
       echo "BASHRC_ENV=$(grep -cF "# --- PAI environment" /home/claude/.bashrc 2>/dev/null || echo 0)"
       echo "ZSHRC_ENV=$(grep -cF "# --- PAI environment" /home/claude/.zshrc 2>/dev/null || echo 0)"
       echo "COMPANION=$(test -d /home/claude/pai-companion/companion && echo YES || echo NO)"
-      echo "PW_VER=$(bunx playwright --version 2>/dev/null || echo MISSING)"
+      echo "PW_VER=$(command -v bunx >/dev/null 2>&1 && bunx playwright --version 2>/dev/null || echo MISSING)"
       for m in .claude data exchange portal work upstream; do
         test -d "/home/claude/$m" && echo "MOUNT_${m}=YES" || echo "MOUNT_${m}=NO"
       done
@@ -216,21 +189,12 @@ else
     # Parse results
     get_val() { echo "$VM_RESULTS" | grep "^$1=" | cut -d= -f2- | tr -d '[:space:]'; }
 
-    ACTUAL_BUN=$(get_val BUN_VER)
-    check_version "Bun" "$BUN_VERSION" "$ACTUAL_BUN"
+    check_installed "Bun" "$(get_val BUN_VER)"
+    check_installed "Claude Code" "$(get_val CLAUDE_VER)"
+    check_installed "Node.js" "$(get_val NODE_VER)"
 
-    ACTUAL_CLAUDE=$(get_val CLAUDE_VER)
-    check_version "Claude Code" "$CLAUDE_CODE_VERSION" "$ACTUAL_CLAUDE"
-
-    ACTUAL_NODE=$(get_val NODE_VER)
-    if [ -n "$ACTUAL_NODE" ] && [ "$ACTUAL_NODE" != "MISSING" ]; then
-      pinned "Node.js" "($ACTUAL_NODE)"
-    else
-      failed "Node.js"
-    fi
-
-    [ "$(get_val PAI_DIR)" = "YES" ] && pinned "PAI directory" || failed "PAI directory"
-    [ "$(get_val PAI_LINK)" = "YES" ] && pinned "PAI skill symlink" || failed "PAI skill symlink"
+    [ "$(get_val PAI_DIR)" = "YES" ] && passed "PAI directory" || failed "PAI directory"
+    [ "$(get_val PAI_LINK)" = "YES" ] && passed "PAI skill symlink" || failed "PAI skill symlink"
 
     # Mount accessibility
     MOUNTS_OK=true
@@ -242,19 +206,14 @@ else
       fi
     done
     if [ "$MOUNTS_OK" = true ]; then
-      pinned "VM mounts accessible (6/6)"
+      passed "VM mounts accessible (6/6)"
     fi
 
-    [ "$(get_val BASHRC_ENV)" != "0" ] && pinned ".bashrc PAI environment block" || failed ".bashrc PAI environment block"
-    [ "$(get_val ZSHRC_ENV)" != "0" ] && pinned ".zshrc PAI environment block" || failed ".zshrc PAI environment block"
-    [ "$(get_val COMPANION)" = "YES" ] && pinned "PAI Companion repo" || failed "PAI Companion repo"
+    [ "$(get_val BASHRC_ENV)" != "0" ] && passed ".bashrc PAI environment block" || failed ".bashrc PAI environment block"
+    [ "$(get_val ZSHRC_ENV)" != "0" ] && passed ".zshrc PAI environment block" || failed ".zshrc PAI environment block"
+    [ "$(get_val COMPANION)" = "YES" ] && passed "PAI Companion repo" || failed "PAI Companion repo"
 
-    ACTUAL_PW=$(get_val PW_VER)
-    if [ -n "$ACTUAL_PW" ] && [ "$ACTUAL_PW" != "MISSING" ]; then
-      check_version "Playwright" "$PLAYWRIGHT_VERSION" "$ACTUAL_PW"
-    else
-      drifted "Playwright" "(could not verify version)"
-    fi
+    check_installed "Playwright" "$(get_val PW_VER)"
   fi
 fi
 
@@ -264,18 +223,15 @@ fi
 
 echo ""
 echo -e "  ──────────────────────────────────────────────"
-TOTAL=$((PASS + DRIFT + FAIL))
-echo -e "  ${GREEN}${PASS} PINNED${NC}  ${YELLOW}${DRIFT} DRIFTED${NC}  ${RED}${FAIL} FAILED${NC}  (${TOTAL} checks)"
+TOTAL=$((PASS + FAIL))
+echo -e "  ${GREEN}${PASS} PASS${NC}  ${RED}${FAIL} FAIL${NC}  (${TOTAL} checks)"
 echo ""
 
 if [ $FAIL -gt 0 ]; then
   echo -e "  ${RED}Some checks failed.${NC} Review output above for details."
   echo -e "  Re-run ${BOLD}./install.sh${NC} to fix, or check ${BOLD}~/.pai-install.log${NC}"
   exit 1
-elif [ $DRIFT -gt 0 ]; then
-  echo -e "  ${YELLOW}Some versions drifted${NC} (likely Claude Code auto-update). Non-blocking."
-  exit 0
 else
-  echo -e "  ${GREEN}All checks passed. System is deterministic.${NC}"
+  echo -e "  ${GREEN}All checks passed.${NC}"
   exit 0
 fi
