@@ -137,6 +137,28 @@ SAYSHIM
 chmod +x "$HOME/.local/bin/say"
 log "Linux 'say' shim installed (Kokoro → espeak-ng fallback)"
 
+# Install 'afplay' shim — Linux replacement for macOS audio player.
+# Wraps ffplay with PulseAudio socket so any code calling afplay just works.
+cat > "$HOME/.local/bin/afplay" <<'AFSHIM'
+#!/bin/bash
+# afplay — Linux shim for macOS afplay command
+# Routes audio through ffplay → PulseAudio → VM audio device → Mac speakers
+FILE=""
+VOLUME="1.0"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -v) VOLUME="$2"; shift 2 ;;
+    -*) shift ;;
+    *) FILE="$1"; shift ;;
+  esac
+done
+[ -z "$FILE" ] || [ ! -f "$FILE" ] && exit 1
+SDL_VOL=$(awk "BEGIN {printf \"%d\", $VOLUME * 100}")
+PULSE_SERVER=unix:/run/pulse/native ffplay -nodisp -autoexit -volume "$SDL_VOL" -loglevel quiet "$FILE" 2>/dev/null
+AFSHIM
+chmod +x "$HOME/.local/bin/afplay"
+log "Linux 'afplay' shim installed (ffplay + PulseAudio)"
+
 # ─── Step 2: Bun ────────────────────────────────────────────
 step "2/6" "Installing Bun..."
 
@@ -286,25 +308,6 @@ else
   fi
 
   log "PAI installed"
-fi
-
-# Patch VoiceServer for Linux: add espeak-ng/ffplay fallback when no ElevenLabs key
-VOICE_SERVER="$HOME/.claude/VoiceServer/server.ts"
-if [ -f "$VOICE_SERVER" ]; then
-  # Add local TTS fallback after the "ElevenLabs API key not configured" throw.
-  # The patch replaces the throw with a call to espeak-ng via the 'say' shim.
-  if grep -q "throw new Error('ElevenLabs API key not configured')" "$VOICE_SERVER"; then
-    sed -i "s|throw new Error('ElevenLabs API key not configured');|// On Linux without ElevenLabs, use local TTS via say shim (espeak-ng/Kokoro)\n    if (process.platform === 'linux') {\n      const { execSync } = require('child_process');\n      try {\n        execSync(\`PULSE_SERVER=unix:/run/pulse/native say \${JSON.stringify(text)}\`, { timeout: 15000 });\n        return new ArrayBuffer(0); // empty buffer signals local playback handled\n      } catch { }\n    }\n    throw new Error('ElevenLabs API key not configured');|" "$VOICE_SERVER"
-    log "VoiceServer patched with Linux TTS fallback (espeak-ng)"
-  else
-    log "VoiceServer already patched or has different structure — skipping"
-  fi
-
-  # Also patch playAudio to skip playback when buffer is empty (local TTS already played)
-  if grep -q "await Bun.write(tempFile, audioBuffer);" "$VOICE_SERVER" && ! grep -q "audioBuffer.byteLength === 0" "$VOICE_SERVER"; then
-    sed -i "s|await Bun.write(tempFile, audioBuffer);|if (audioBuffer.byteLength === 0) return; // local TTS already played audio\n  await Bun.write(tempFile, audioBuffer);|" "$VOICE_SERVER"
-    log "VoiceServer playAudio patched for local TTS bypass"
-  fi
 fi
 
 source ~/.bashrc 2>/dev/null || true
