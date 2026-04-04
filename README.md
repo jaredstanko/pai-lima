@@ -164,9 +164,23 @@ This stops the VM briefly (~10 seconds), adds the mount, and restarts. Your dire
 ./scripts/mount.sh ~/Projects/my-repo /home/claude/code  # Choose where it appears in the VM
 ```
 
+### Syncing a Directory for One Session
+
+If you want to work on a project without adding a permanent mount, use Lima's `--sync` flag. It copies the directory into the VM when you open the shell and copies any changes back when you exit:
+
+```bash
+# Sync ~/Projects/my-repo into the VM for this session
+limactl shell --sync ~/Projects/my-repo pai
+
+# The AI can work on the files inside the VM.
+# When you exit the shell, changes sync back to your Mac.
+```
+
+This is useful for one-off tasks — no VM restart needed, and your files stay safe because the AI works on a copy inside the VM, not the originals. Changes only come back when the session ends cleanly.
+
 ### Copying Files Without Mounting
 
-To copy files in or out without adding a permanent mount:
+To copy individual files in or out without mounting or syncing:
 
 ```bash
 # Copy a file from your Mac into the VM
