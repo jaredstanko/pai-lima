@@ -147,6 +147,40 @@ Your Mac and the AI share files through `~/pai-workspace/`:
 
 Your data lives on your Mac. You can destroy and recreate the VM without losing anything.
 
+### Sharing Additional Folders
+
+The quickest way to get files into the VM is the `exchange/` folder — just drop files there.
+
+To give the AI permanent access to a project folder on your Mac:
+
+```bash
+./scripts/mount.sh ~/Projects/my-repo
+```
+
+This stops the VM briefly (~10 seconds), adds the mount, and restarts. Your directory then appears at `/home/claude/my-repo` inside the VM with live two-way sync.
+
+```bash
+./scripts/mount.sh --list                                # See what's shared
+./scripts/mount.sh ~/Projects/my-repo /home/claude/code  # Choose where it appears in the VM
+```
+
+### Copying Files Without Mounting
+
+To copy files in or out without adding a permanent mount:
+
+```bash
+# Copy a file from your Mac into the VM
+limactl cp ./myfile.txt pai:/home/claude/exchange/myfile.txt
+
+# Copy a file from the VM to your Mac
+limactl cp pai:/home/claude/work/output.pdf ./output.pdf
+
+# Copy an entire folder (use -r)
+limactl cp -r ./my-project pai:/home/claude/exchange/my-project
+```
+
+This works while the VM is running — no restart needed.
+
 ---
 
 ## Advanced
