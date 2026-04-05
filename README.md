@@ -22,7 +22,7 @@ graph TB
 
     menubar -->|opens| terminal
     terminal -->|connects to| claude
-    workspace <-->|shared folders| pai
+    pai -->|shared folders| workspace
     browser -->|localhost:8080| portal
     voice -->|audio passthrough| mac
 ```
