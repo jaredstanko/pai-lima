@@ -6,36 +6,25 @@ A sandboxed AI workspace running Claude Code on your Mac. One script to install,
 
 ```mermaid
 graph TB
-    subgraph mac ["Your Mac"]
-        menubar["PAI-Status\n(menu bar icon)"]
-        terminal["kitty terminal"]
-        workspace["~/pai-workspace/\nYour files live here"]
-        browser["Browser"]
+    subgraph mac [Your Mac]
+        menubar[PAI-Status menu bar icon]
+        terminal[kitty terminal]
+        workspace[~/pai-workspace/ Your files live here]
+        browser[Browser]
     end
 
-    subgraph vm ["Sandbox VM – Ubuntu, runs inside your Mac"]
-        claude["Claude Code\nAI assistant"]
-        pai["PAI\nSkills and tools"]
-        portal["Web Portal\nlocalhost:8080"]
-        voice["Voice Server\nAI speaks to you"]
+    subgraph vm [Sandbox VM - Ubuntu]
+        claude[Claude Code AI assistant]
+        pai[PAI Skills and tools]
+        portal[Web Portal localhost:8080]
+        voice[Voice Server]
     end
 
-    menubar -- opens --> terminal
-    terminal -- connects to --> claude
-    workspace <-- shared folders --> pai
-    browser -- localhost:8080 --> portal
-    voice -- audio passthrough --> mac
-
-    style mac fill:#f8f8f8,stroke:#333,stroke-width:2px
-    style vm fill:#e8f4e8,stroke:#4a4,stroke-width:2px
-    style menubar fill:#fff,stroke:#666
-    style terminal fill:#fff,stroke:#666
-    style workspace fill:#fff,stroke:#666
-    style browser fill:#fff,stroke:#666
-    style claude fill:#fff,stroke:#4a4
-    style pai fill:#fff,stroke:#4a4
-    style portal fill:#fff,stroke:#4a4
-    style voice fill:#fff,stroke:#4a4
+    menubar -->|opens| terminal
+    terminal -->|connects to| claude
+    workspace <-->|shared folders| pai
+    browser -->|localhost:8080| portal
+    voice -->|audio passthrough| mac
 ```
 
 **The key idea:** Your AI runs in a sandbox (a mini Linux computer inside your Mac). Your files stay on your Mac in `~/pai-workspace/`. The AI can read and write to those files, but it can't touch anything else on your Mac.
