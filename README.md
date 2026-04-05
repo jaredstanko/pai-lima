@@ -6,25 +6,25 @@ A sandboxed AI workspace running Claude Code on your Mac. One script to install,
 
 ```mermaid
 graph TB
-    subgraph mac ["🖥️ Your Mac"]
-        menubar["PAI-Status<br/>(menu bar icon)"]
+    subgraph mac ["Your Mac"]
+        menubar["PAI-Status\n(menu bar icon)"]
         terminal["kitty terminal"]
-        workspace["~/pai-workspace/<br/>Your files live here"]
+        workspace["~/pai-workspace/\nYour files live here"]
         browser["Browser"]
     end
 
-    subgraph vm ["🐧 Sandbox VM (Ubuntu, runs inside your Mac)"]
-        claude["Claude Code<br/>AI assistant"]
-        pai["PAI<br/>Skills & tools"]
-        portal["Web Portal<br/>localhost:8080"]
-        voice["Voice Server<br/>AI speaks to you"]
+    subgraph vm ["Sandbox VM – Ubuntu, runs inside your Mac"]
+        claude["Claude Code\nAI assistant"]
+        pai["PAI\nSkills and tools"]
+        portal["Web Portal\nlocalhost:8080"]
+        voice["Voice Server\nAI speaks to you"]
     end
 
-    menubar -- "opens" --> terminal
-    terminal -- "connects to" --> claude
-    workspace <-- "shared folders" --> pai
-    browser -- "localhost:8080" --> portal
-    voice -- "audio passthrough" --> mac
+    menubar -- opens --> terminal
+    terminal -- connects to --> claude
+    workspace <-- shared folders --> pai
+    browser -- localhost:8080 --> portal
+    voice -- audio passthrough --> mac
 
     style mac fill:#f8f8f8,stroke:#333,stroke-width:2px
     style vm fill:#e8f4e8,stroke:#4a4,stroke-width:2px
