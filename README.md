@@ -89,6 +89,16 @@ Wait for it to finish. This takes a few minutes.
 
 Open http://localhost:8080 in your browser to see the web portal. From now on, just click **New PAI Session** in the menu bar whenever you want to talk to your AI.
 
+### Keeping Up to Date
+
+To get the latest updates, open Terminal and run:
+
+```bash
+cd ~/pai-lima
+git pull
+./scripts/upgrade.sh
+```
+
 ---
 
 ## What You Get
@@ -240,13 +250,15 @@ If you prefer the terminal over the menu bar:
 
 ### Upgrading
 
+When updates are released, run these commands to get them:
+
 ```bash
-cd pai-lima
+cd ~/pai-lima
 git pull
 ./scripts/upgrade.sh
 ```
 
-Your workspace, authentication, and sessions are preserved.
+That's it. `git pull` downloads the latest changes, and `upgrade.sh` applies them to your VM and menu bar app. Your workspace, authentication, and sessions are all preserved -- nothing gets deleted.
 
 ### Backup & Restore
 
