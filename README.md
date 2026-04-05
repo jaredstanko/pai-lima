@@ -258,7 +258,27 @@ git pull
 ./scripts/upgrade.sh
 ```
 
-That's it. `git pull` downloads the latest changes, and `upgrade.sh` applies them to your VM and menu bar app. Your workspace, authentication, and sessions are all preserved -- nothing gets deleted.
+That's it. `git pull` downloads the latest changes, and `upgrade.sh` applies them to your VM and menu bar app.
+
+**What the upgrade script does:**
+
+1. Updates host tools (Lima, kitty) via Homebrew
+2. Ensures all shared directories exist in `~/pai-workspace/`
+3. Adds vzNAT networking and port forwarding if missing (restarts the VM briefly)
+4. Updates shell aliases, PATH, and environment inside the VM
+5. Updates system packages inside the VM
+6. Upgrades Claude Code to the latest version (migrates from npm to native install if needed)
+7. Rebuilds the PAI-Status menu bar app from source
+
+**What it will NOT touch:**
+
+- `~/pai-workspace/` -- all your files, projects, and exchange data
+- Claude Code authentication -- you won't need to sign in again
+- Claude Code sessions -- you can still resume previous conversations
+- PAI skills, memory, and configuration (`~/.claude/` inside the VM)
+- `~/pai-workspace/work/` -- any AI-generated projects or outputs
+
+The VM is designed to be ephemeral. You can destroy it and rebuild it from scratch without losing anything important, because all persistent data lives in `~/pai-workspace/` on your Mac, which is mounted into the VM as shared folders.
 
 ### Backup & Restore
 
