@@ -81,7 +81,7 @@ macOS-specific binaries (like afplay) that won't work on Linux.
 Set both to start on boot.
 ```
 
-Claude Code will ask you some questions. Each time press **2** (Yes) to allow it to edit settings for this session.
+**Claude Code will ask you some questions. Each time press 2 (Yes) to allow it to edit settings for this session.**
 
 Wait for it to finish. This takes a few minutes.
 
