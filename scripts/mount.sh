@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — Mount a host directory into the VM
+# PAI Lima -- Mount a host directory into the VM
 # Adds a permanent shared folder so the AI can access files on your Mac.
 #
 # Usage:

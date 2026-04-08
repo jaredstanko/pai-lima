@@ -1,10 +1,10 @@
 #!/bin/bash
-# PAI Lima — Deterministic Host Installer for macOS
+# PAI Lima -- Deterministic Host Installer for macOS
 # Single entry point: installs all prerequisites, creates the VM,
 # provisions it, builds the menu bar app, and sets up browser bookmarks.
 #
 # Tools are installed at their latest versions. The Ubuntu VM image is pinned in pai.yaml.
-# This script is idempotent — safe to re-run if interrupted.
+# This script is idempotent -- safe to re-run if interrupted.
 #
 # Usage:
 #   ./install.sh                        # Normal install (default "pai" instance)
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-# Use a safe TERM for install output — kitty/xterm-kitty can cause
+# Use a safe TERM for install output -- kitty/xterm-kitty can cause
 # garbled output when viewed in Terminal.app or other basic terminals
 export TERM=xterm-256color
 
@@ -93,7 +93,7 @@ retry() {
 
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  Sandbox My AI — PAI Lima Installer${NC}"
+echo -e "${BOLD}  Sandbox My AI -- PAI Lima Installer${NC}"
 if [ -n "$INSTANCE_SUFFIX" ]; then
   echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
 fi
@@ -212,7 +212,7 @@ sed \
 
 # If using a non-default port, add hostPort to the port forwarding
 if [ "$PORTAL_PORT" != "8080" ]; then
-  # macOS sed doesn't support \n in replacement — use literal newline
+  # macOS sed doesn't support \n in replacement -- use literal newline
   sed -i '' -e "s|guestPort: 8080|guestPort: 8080\\
     hostPort: ${PORTAL_PORT}|g" "$GENERATED_YAML"
 fi
@@ -294,7 +294,7 @@ ok "Verification complete"
 echo ""
 echo ""
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN}  SETUP COMPLETE — READ THESE INSTRUCTIONS${NC}"
+echo -e "${BOLD}${GREEN}  SETUP COMPLETE -- READ THESE INSTRUCTIONS${NC}"
 echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "  Follow these steps in order:"

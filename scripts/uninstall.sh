@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — Host Cleanup
+# PAI Lima -- Host Cleanup
 # Removes everything installed by install.sh and scripts/upgrade.sh.
 # Asks before removing workspace data.
 #
@@ -28,7 +28,7 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 
 echo ""
 echo -e "${BOLD}${RED}═══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  PAI Lima — Host Cleanup${NC}"
+echo -e "${BOLD}  PAI Lima -- Host Cleanup${NC}"
 if [ -n "$INSTANCE_SUFFIX" ]; then
   echo -e "${BOLD}  Instance: ${RED}${INSTANCE_NAME}${NC}"
 fi
@@ -154,12 +154,12 @@ if [ -d "$WORKSPACE" ]; then
   echo -e "  ${RED}${BOLD}WARNING: ${WORKSPACE}/ contains your data!${NC}"
   echo ""
   echo "  This includes:"
-  echo "    • claude-home/ — PAI config, settings, memory"
-  echo "    • work/        — Projects and work-in-progress"
-  echo "    • data/        — Persistent data"
-  echo "    • exchange/    — File exchange"
-  echo "    • portal/      — Web portal content"
-  echo "    • upstream/    — Reference repos"
+  echo "    • claude-home/ -- PAI config, settings, memory"
+  echo "    • work/        -- Projects and work-in-progress"
+  echo "    • data/        -- Persistent data"
+  echo "    • exchange/    -- File exchange"
+  echo "    • portal/      -- Web portal content"
+  echo "    • upstream/    -- Reference repos"
   echo ""
 
   # Show sizes
@@ -175,7 +175,7 @@ if [ -d "$WORKSPACE" ]; then
     rm -rf "$WORKSPACE"
     ok "Removed ${WORKSPACE}/"
   else
-    warn "Kept ${WORKSPACE}/ — you can remove it manually later"
+    warn "Kept ${WORKSPACE}/ -- you can remove it manually later"
   fi
 else
   skip "${WORKSPACE}/"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — launch PAI in a kitty terminal
+# PAI Lima -- launch PAI in a kitty terminal
 # Opens a kitty window connected to the VM running PAI (Claude Code).
 #
 # Usage:

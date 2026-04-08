@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — Shared instance configuration
+# PAI Lima -- Shared instance configuration
 # Source this file at the top of every script to get instance-aware variables.
 #
 # Parses --name=X and --port=N from arguments and sets:
@@ -83,7 +83,7 @@ export INSTANCE_NAME INSTANCE_SUFFIX VM_NAME WORKSPACE PORTAL_PORT APP_NAME APP_
 pai_vm_status() {
   local json
   json=$(limactl list --json 2>/dev/null || echo "")
-  # grep exits 1 on no match — must not propagate under set -eo pipefail
+  # grep exits 1 on no match -- must not propagate under set -eo pipefail
   echo "$json" | grep -A5 "\"name\":\"${VM_NAME}\"" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || true
 }
 

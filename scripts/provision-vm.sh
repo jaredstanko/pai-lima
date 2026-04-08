@@ -1,9 +1,9 @@
 #!/bin/bash
-# PAI Provisioning Script — VM Setup
+# PAI Provisioning Script -- VM Setup
 # Run this INSIDE the Lima VM as the 'claude' user.
 # Called automatically by install.sh on the Mac.
 #
-# This script is idempotent — safe to re-run if interrupted.
+# This script is idempotent -- safe to re-run if interrupted.
 #
 # Usage:
 #   bash ~/provision-vm.sh
@@ -57,7 +57,7 @@ echo "  PAI Provisioning"
 echo "============================================"
 echo -e "${NC}"
 
-# Use a safe TERM for installation — xterm-kitty can cause installers
+# Use a safe TERM for installation -- xterm-kitty can cause installers
 # to hang when run via limactl shell (not a real kitty terminal).
 # The shell env block below sets xterm-kitty for interactive use.
 export TERM=xterm-256color
@@ -87,7 +87,7 @@ if [ "$NODE_NEEDS_SETUP" = true ]; then
   log "Node.js $(node --version) installed from NodeSource"
 fi
 
-# uv — modern Python package runner (replaces pip for running scripts)
+# uv -- modern Python package runner (replaces pip for running scripts)
 if command -v uv &>/dev/null; then
   log "uv already installed: $(uv --version 2>/dev/null || echo 'present')"
 else
@@ -104,13 +104,13 @@ else
   log "yt-dlp installed via uv: $(yt-dlp --version 2>/dev/null || echo 'installed')"
 fi
 
-# Install 'say' shim — Linux replacement for macOS 'say' command.
+# Install 'say' shim -- Linux replacement for macOS 'say' command.
 # Fallback chain: Kokoro (if running) → espeak-ng → silence.
 # PAI's VoiceServer calls 'say' when no ElevenLabs key is configured.
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/say" <<'SAYSHIM'
 #!/bin/bash
-# say — Linux shim for macOS 'say' command
+# say -- Linux shim for macOS 'say' command
 # Fallback: Kokoro TTS → espeak-ng → silence
 TEXT="$*"
 [ -z "$TEXT" ] && exit 0
@@ -137,11 +137,11 @@ SAYSHIM
 chmod +x "$HOME/.local/bin/say"
 log "Linux 'say' shim installed (Kokoro → espeak-ng fallback)"
 
-# Install 'afplay' shim — Linux replacement for macOS audio player.
+# Install 'afplay' shim -- Linux replacement for macOS audio player.
 # Wraps ffplay with PulseAudio socket so any code calling afplay just works.
 cat > "$HOME/.local/bin/afplay" <<'AFSHIM'
 #!/bin/bash
-# afplay — Linux shim for macOS afplay command
+# afplay -- Linux shim for macOS afplay command
 # Routes audio through ffplay → PulseAudio → VM audio device → Mac speakers
 FILE=""
 VOLUME="1.0"
@@ -256,10 +256,10 @@ export PATH="$HOME/go/bin:$PATH"
 # Node global (npm install -g)
 export PATH="$HOME/.npm-global/bin:$PATH"
 
-# Terminal — kitty-terminfo is installed in the VM
+# Terminal -- kitty-terminfo is installed in the VM
 export TERM=xterm-kitty
 
-# Audio — PulseAudio system-wide socket
+# Audio -- PulseAudio system-wide socket
 export PULSE_SERVER=unix:/run/pulse/native
 
 # Default editor
@@ -367,10 +367,10 @@ ENVEOF
 TRUSTEOF
     log "Claude Code workspaces pre-trusted"
   else
-    log "Claude Code config already exists — skipping trust setup"
+    log "Claude Code config already exists -- skipping trust setup"
   fi
 else
-  warn "$HOME/.claude mount not writable — skipping .env write"
+  warn "$HOME/.claude mount not writable -- skipping .env write"
 fi
 
 # ─── Step 5: PAI Companion ──────────────────────────────────
@@ -387,7 +387,7 @@ else
     rm -rf /tmp/pai-companion
     log "PAI Companion cloned to ~/pai-companion"
   else
-    warn "Failed to clone pai-companion — you can clone it manually later."
+    warn "Failed to clone pai-companion -- you can clone it manually later."
   fi
 fi
 
@@ -441,5 +441,5 @@ log "PAI:          ~/.claude/"
 log "Companion:    ~/pai-companion/ (ready for Claude to install)"
 log "Log:          $LOG_FILE"
 echo ""
-warn "Next steps — follow the instructions shown by the installer on your Mac."
+warn "Next steps -- follow the instructions shown by the installer on your Mac."
 echo ""

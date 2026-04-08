@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — End-State Verification
+# PAI Lima -- End-State Verification
 # Checks that the full system is installed and functional.
 # Uses 2-state model: PASS (present and working), FAIL (missing or broken).
 #
@@ -89,7 +89,7 @@ check_installed() {
 
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  PAI Lima — System Verification${NC}"
+echo -e "${BOLD}  PAI Lima -- System Verification${NC}"
 if [ -n "$INSTANCE_SUFFIX" ]; then
   echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
 fi
@@ -166,7 +166,7 @@ VM_STATUS=$(pai_vm_status)
 if [ -z "$VM_STATUS" ]; then
   failed "Lima VM '${VM_NAME}'" "(does not exist)"
   echo ""
-  echo -e "  ${RED}Cannot check VM internals — VM does not exist.${NC}"
+  echo -e "  ${RED}Cannot check VM internals -- VM does not exist.${NC}"
 else
   if [ "$VM_STATUS" = "Running" ]; then
     passed "Lima VM '${VM_NAME}'" "(running)"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — Upgrade existing installation
+# PAI Lima -- Upgrade existing installation
 # Safe to run on an existing VM without losing data.
 #
 # What this upgrades:
@@ -48,7 +48,7 @@ skip() { echo -e "        ${YELLOW}⊘${NC} $1 (already up to date)"; }
 
 echo ""
 echo -e "${BOLD}${CYAN}═══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  Sandbox My AI — PAI Lima Upgrade${NC}"
+echo -e "${BOLD}  Sandbox My AI -- PAI Lima Upgrade${NC}"
 if [ -n "$INSTANCE_SUFFIX" ]; then
   echo -e "${BOLD}  Instance: ${CYAN}${INSTANCE_NAME}${NC}"
 fi
@@ -66,7 +66,7 @@ if command -v brew &>/dev/null; then
   brew upgrade lima 2>/dev/null && ok "Lima upgraded" || skip "Lima"
   brew upgrade --cask kitty 2>/dev/null && ok "kitty upgraded" || skip "kitty"
 else
-  skip "Homebrew not found — skipping tool upgrades"
+  skip "Homebrew not found -- skipping tool upgrades"
 fi
 
 # ─── Step 2: Ensure shared directories exist ──────────────────
@@ -162,7 +162,7 @@ export PATH=\"\$HOME/go/bin:\$PATH\"
 # Node global (npm install -g)
 export PATH=\"\$HOME/.npm-global/bin:\$PATH\"
 
-# Terminal — kitty-terminfo is installed in the VM
+# Terminal -- kitty-terminfo is installed in the VM
 export TERM=xterm-kitty
 
 # Default editor
@@ -199,7 +199,7 @@ limactl shell "$VM_NAME" bash -lc '
   CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "")
 
   if [ -z "$CLAUDE_PATH" ]; then
-    echo "[!] Claude Code not found — installing native..."
+    echo "[!] Claude Code not found -- installing native..."
     curl -fsSL https://claude.ai/install.sh | bash
   elif echo "$CLAUDE_PATH" | grep -qE "node_modules|npm|lib/node_modules"; then
     echo "[!] Claude Code installed via npm (old method): $CLAUDE_PATH"
@@ -210,7 +210,7 @@ limactl shell "$VM_NAME" bash -lc '
   else
     echo "[=] Claude Code already native: $CLAUDE_PATH"
     echo "[+] Running claude update..."
-    claude update 2>/dev/null || echo "[!] claude update not available — already latest or manual update needed"
+    claude update 2>/dev/null || echo "[!] claude update not available -- already latest or manual update needed"
   fi
 '
 ok "Claude Code up to date"

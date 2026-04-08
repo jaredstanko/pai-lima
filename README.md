@@ -148,7 +148,7 @@ Your data lives on your Mac. You can destroy and recreate the VM without losing 
 
 ### Sharing Additional Folders
 
-The quickest way to get files into the VM is the `exchange/` folder — just drop files there.
+The quickest way to get files into the VM is the `exchange/` folder -- just drop files there.
 
 To give the AI permanent access to a project folder on your Mac:
 
@@ -175,7 +175,7 @@ limactl shell --sync ~/Projects/my-repo pai
 # When you exit the shell, changes sync back to your Mac.
 ```
 
-This is useful for one-off tasks — no VM restart needed, and your files stay safe because the AI works on a copy inside the VM, not the originals. Changes only come back when the session ends cleanly.
+This is useful for one-off tasks -- no VM restart needed, and your files stay safe because the AI works on a copy inside the VM, not the originals. Changes only come back when the session ends cleanly.
 
 ### Copying Files Without Mounting
 
@@ -192,7 +192,7 @@ limactl cp pai:/home/claude/work/output.pdf ./output.pdf
 limactl cp -r ./my-project pai:/home/claude/exchange/my-project
 ```
 
-This works while the VM is running — no restart needed.
+This works while the VM is running -- no restart needed.
 
 ---
 

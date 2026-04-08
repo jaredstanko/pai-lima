@@ -4,7 +4,7 @@
 # Tested on: macOS + Apple Silicon (M4)
 # Lima 2.0.3, vmType: vz, audio.device: vz
 
-# VZ: native Apple Virtualization.framework — faster than QEMU on Apple Silicon
+# VZ: native Apple Virtualization.framework -- faster than QEMU on Apple Silicon
 vmType: vz
 
 images:
@@ -66,7 +66,7 @@ provision:
       hostnamectl set-hostname pai
       sed -i 's/lima-pai/pai/g' /etc/hosts
 
-      # Cloud images lack linux-modules-extra — needed for virtio_snd driver
+      # Cloud images lack linux-modules-extra -- needed for virtio_snd driver
       apt-get update -qq
       apt-get install -y -qq linux-modules-extra-$(uname -r)
 

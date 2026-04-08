@@ -1,5 +1,5 @@
 #!/bin/bash
-# PAI Lima — spawn a new PAI session in kitty
+# PAI Lima -- spawn a new PAI session in kitty
 # Thin wrapper around launch.sh for backward compatibility.
 #
 # Usage:

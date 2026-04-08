@@ -51,7 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let portalMenuTag = 100
     private let terminalMenuTag = 101
 
-    // Paths — limactl and kitty are in /opt/homebrew/bin on Apple Silicon
+    // Paths -- limactl and kitty are in /opt/homebrew/bin on Apple Silicon
     private let env: [String: String] = {
         var e = ProcessInfo.processInfo.environment
         let home = NSHomeDirectory()
@@ -93,7 +93,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // VM Control — separate Start, Stop, Restart
+        // VM Control -- separate Start, Stop, Restart
         startMenuItem = NSMenuItem(title: "Start VM", action: #selector(startVM), keyEquivalent: "s")
         startMenuItem.target = self
         menu.addItem(startMenuItem)
@@ -395,7 +395,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } catch { }
             }
 
-            // No existing Kitty instance — open a new window
+            // No existing Kitty instance -- open a new window
             var kittyArgs = ["--directory", NSHomeDirectory(), "--title", title]
             kittyArgs.append(contentsOf: args)
 
@@ -406,7 +406,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             task.standardOutput = FileHandle.nullDevice
             task.standardError = FileHandle.nullDevice
             try? task.run()
-            // Don't wait — kitty is a long-running GUI process
+            // Don't wait -- kitty is a long-running GUI process
         }
     }
 
@@ -520,7 +520,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if task.isRunning { task.terminate() }
         }
 
-        // Read pipe before waiting — prevents deadlock if output exceeds pipe buffer
+        // Read pipe before waiting -- prevents deadlock if output exceeds pipe buffer
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
 
